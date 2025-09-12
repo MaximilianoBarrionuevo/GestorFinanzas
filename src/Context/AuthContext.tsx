@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { supabase } from "../supabaseClient"
 import type { User } from "@supabase/supabase-js"
+import { useNavigate, useLocation } from "react-router-dom"
 
 type AuthContextType = {
   user: User | null
@@ -15,9 +16,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  useEffect(() => {
+   useEffect(() => {
     // Cargar sesión inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
 
     // Escuchar cambios de auth
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -28,6 +35,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       listener.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (user && location.pathname === "/") {
+      navigate("/dashboard", { replace: true })
+    }
+  }, [user, location, navigate])
 
   const login = async (email: string, password: string) => {
     setLoading(true)
@@ -41,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut()
     setUser(null)
     setLoading(false)
+    navigate('/')
   }
 
   const register = async (email: string, password: string) => {

@@ -7,9 +7,10 @@ type TransactionFormProps = {
 }
 
 export default function TransactionForm({ userId, onAdd }: TransactionFormProps) {
+  const today = new Date().toISOString().split("T")[0]
   const [amount, setAmount] = useState(0)
   const [category, setCategory] = useState("")
-  const [date, setDate] = useState("")
+  const [date, setDate] = useState(today)
   const [type, setType] = useState<"ingreso" | "egreso">("egreso") // 👈 nuevo state
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -29,7 +30,7 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
 
     setAmount(0)
     setCategory("")
-    setDate("")
+    setDate(today)
     setType("ingreso") // reset por defecto
   }
 
@@ -45,13 +46,24 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         className="w-full p-2 border rounded"
       />
 
-      <input
-        type="text"
-        placeholder="Categoría"
+      <select
         value={category}
         onChange={(e) => setCategory(e.target.value)}
         className="w-full p-2 border rounded"
-      />
+      >
+        <option value="">Seleccionar categoría</option>
+        <option value="Sueldo">Sueldo</option>
+        <option value="Gimnasio">Gimnasio</option>
+        <option value="Comida">Comida</option>
+        <option value="Casino">Casino</option>
+        <option value="Varios">Varios</option>
+        <option value="Indumentaria">Indumentaria</option>
+        <option value="Almacén">Almacén</option>
+        <option value="Transporte">Transporte</option>
+        <option value="Servicios">Servicios</option>
+        <option value="Entretenimiento">Entretenimiento</option>
+        <option value="Ahorro/Inversión">Ahorro/Inversión</option>
+      </select>
 
       <input
         type="date"
@@ -60,7 +72,6 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         className="w-full p-2 border rounded"
       />
 
-      {/* 👇 Nuevo selector para ingreso/egreso */}
       <select
         value={type}
         onChange={(e) => setType(e.target.value as "ingreso" | "egreso")}
