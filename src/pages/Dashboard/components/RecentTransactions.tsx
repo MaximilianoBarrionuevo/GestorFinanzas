@@ -57,7 +57,7 @@ export default function RecentTransactions({ transactions, onDelete, onEdit }: P
                   <Pencil className="w-5 h-5 text-blue-600" />
                 </button>
                 <button
-                  onClick={() => onDelete(t.id)}
+                  onClick={() => onDelete(t)}
                   className="p-1 rounded hover:bg-gray-200"
                   title="Eliminar"
                 >

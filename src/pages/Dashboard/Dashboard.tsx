@@ -100,19 +100,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleDeleteTransaction = async (id: string) => {
-    const { error } = await supabase
-      .from("Transacciones")
-      .delete()
-      .eq("id", id)
-
-    if (error) {
-      console.error("Error al eliminar transacción:", error.message)
-    } else {
-      setTransactionsList(prev => prev.filter(t => t.id !== id))
-    }
-  }
-
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<transactions | null>(null);
 
