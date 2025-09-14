@@ -3,6 +3,7 @@ export type transactions = {
   user_id: string
   amount: number
   category: string
+  description: string
   date: string
   type: "ingreso" | "egreso"
 }

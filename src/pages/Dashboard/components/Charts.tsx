@@ -9,6 +9,7 @@ import {
     YAxis,
     Tooltip,
     ResponsiveContainer,
+    Legend,
 } from "recharts"
 import type { transactions } from "../../../types/types"
 import { isSameDay, isSameWeek, isSameMonth } from "date-fns"
@@ -40,13 +41,11 @@ export default function Charts({ transactions }: Props) {
     const incomes = filteredTransactions.filter(t => t.type === "ingreso")
     const expenses = filteredTransactions.filter(t => t.type === "egreso")
 
-    // 👉 Agrupar egresos por categoría
     const groupedExpenses = expenses.reduce((acc: Record<string, number>, t) => {
         acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount)
         return acc
     }, {})
 
-    // 👉 Array para el pie chart
     let dataByCategory = Object.entries(groupedExpenses).map(([name, value]) => ({
         name,
         value,
@@ -55,7 +54,6 @@ export default function Charts({ transactions }: Props) {
         dataByCategory = dataByCategory.filter(d => d.name === selectedCategory)
     }
 
-    // 👉 Bar chart data
     let barData
     let totalIngresos = 0
     let totalEgresos = 0
@@ -81,71 +79,94 @@ export default function Charts({ transactions }: Props) {
     const COLORS = ["#2E6F40", "#A0D861", "#47cc6a", "#6CB979"]
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pie chart */}
-            <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
-                <div className="flex items-center justify-between w-full mb-2">
-                    <h2 className="text-lg font-semibold text-[#2D2D2D]">Gastos por categoría</h2>
-
-                    <div className="flex gap-2">
-                        {/* Filtro de categoria */}
-                        <select
-                            className="border rounded-md px-2 py-1 text-sm"
-                            value={selectedCategory}
-                            onChange={e => setSelectedCategory(e.target.value)}
-                        >
-                            <option value="Todas">Todas</option>
-                            {Object.keys(groupedExpenses).map(cat => (
-                                <option key={cat} value={cat}>
-                                    {cat}
-                                </option>
-                            ))}
-                        </select>
-
-                        {/* Filtro de periodo */}
-                        <select
-                            className="border rounded-md px-2 py-1 text-sm"
-                            value={selectedPeriod}
-                            onChange={e => setSelectedPeriod(e.target.value as "día" | "semana" | "mes")}
-                        >
-                            <option value="día">Día</option>
-                            <option value="semana">Semana</option>
-                            <option value="mes">Mes</option>
-                        </select>
-                    </div>
+        <div className="space-y-6">
+            {/* Resumen rápido */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg shadow p-4 text-center">
+                    <p className="text-sm text-gray-500">Ingresos</p>
+                    <p className="text-xl font-bold text-[#2E6F40]">
+                        ${totalIngresos.toLocaleString()}
+                    </p>
                 </div>
-
-                <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                        <Pie data={dataByCategory} dataKey="value" nameKey="name" outerRadius={80} label>
-                            {dataByCategory.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <Tooltip />
-                    </PieChart>
-                </ResponsiveContainer>
-
-                <p className="mt-2 font-semibold text-[#2D2D2D]">
-                    Total Egresos: ${expenses.reduce((a, t) => a + Math.abs(t.amount), 0).toLocaleString()}
-                </p>
+                <div className="bg-white rounded-lg shadow p-4 text-center">
+                    <p className="text-sm text-gray-500">Egresos</p>
+                    <p className="text-xl font-bold text-red-600">
+                        ${totalEgresos.toLocaleString()}
+                    </p>
+                </div>
             </div>
 
-            {/* Bar chart */}
-            <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
-                <h2 className="text-lg font-semibold mb-2 text-[#2D2D2D]">Ingresos vs Egresos</h2>
-                <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={barData}>
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#A0D861" />
-                    </BarChart>
-                </ResponsiveContainer>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Pie Chart */}
+                <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
+                    <div className="flex items-center justify-between w-full mb-2">
+                        <h2 className="text-lg font-semibold text-[#2D2D2D]">Gastos por categoría</h2>
 
-                <p className="mt-2 font-semibold text-[#2D2D2D]">
-                    Total Ingresos: ${totalIngresos.toLocaleString()} | Total Egresos: ${totalEgresos.toLocaleString()}
-                </p>
+                        <div className="flex gap-2">
+                            <select
+                                className="border rounded-md px-2 py-1 text-sm"
+                                value={selectedCategory}
+                                onChange={e => setSelectedCategory(e.target.value)}
+                            >
+                                <option value="Todas">Todas</option>
+                                {Object.keys(groupedExpenses).map(cat => (
+                                    <option key={cat} value={cat}>
+                                        {cat}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <select
+                                className="border rounded-md px-2 py-1 text-sm"
+                                value={selectedPeriod}
+                                onChange={e => setSelectedPeriod(e.target.value as "día" | "semana" | "mes")}
+                            >
+                                <option value="día">Día</option>
+                                <option value="semana">Semana</option>
+                                <option value="mes">Mes</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                            <Pie
+                                data={dataByCategory}
+                                dataKey="value"
+                                nameKey="name"
+                                outerRadius={80}
+                                label
+                            >
+                                {dataByCategory.map((_, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Bar Chart */}
+                <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
+                    <h2 className="text-lg font-semibold mb-2 text-[#2D2D2D]">Ingresos vs Egresos</h2>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={barData}>
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                            <Bar dataKey="value">
+                                {barData.map((entry, index) => (
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={entry.name.includes("Ingresos") ? "#2E6F40" : "#E63946"}
+                                    />
+                                ))}
+                            </Bar>
+                            <Legend />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
         </div>
     )

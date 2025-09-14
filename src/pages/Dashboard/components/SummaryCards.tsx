@@ -17,7 +17,7 @@ export default function SummaryCards({ data }: Props) {
 
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {cards.map((card, i) => (
                 <div key={i} className={`rounded-2xl shadow-md p-4 text-white ${card.color}`}>
                     <h2 className="text-sm">{card.title}</h2>
