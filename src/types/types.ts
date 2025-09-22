@@ -8,18 +8,20 @@ export type transactions = {
   type: "ingreso" | "egreso"
 }
 
-export type services = {
-  id: string;
-  user_id: string;
-  name: string;
-  amount: number;
-  charge_day: number;
-  category: string;
-};
-
 export type User = {
   id: string;
   email: string;
   name: string;
   created_at: string;
 };
+
+export type services = {
+  id?: string
+  user_id: string
+  nombre: string
+  monto: number
+  frecuencia: "mensual" | "anual" | "unico"
+  proximo_pago: string
+  created_at?: string
+}
+

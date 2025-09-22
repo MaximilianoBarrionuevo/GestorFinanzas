@@ -9,12 +9,13 @@ import { useAuth } from "../../Context/AuthContext"
 import { supabase } from "../../supabaseClient"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
+import ServiceForm from "./components/ServiceForm"
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
 
   const [transactionsList, setTransactionsList] = useState<transactions[]>([])
-  const [servicesList] = useState<services[]>([])
+  const [servicesList, setServicesList] = useState<services[]>([])
 
   const totalIngresos = transactionsList
     .filter(t => t.type === "ingreso")
@@ -30,7 +31,7 @@ export default function Dashboard() {
     saldo,
     ingresos: totalIngresos,
     egresos: totalEgresos,
-    servicios: servicesList.reduce((acc, s) => acc + s.amount, 0),
+    servicios: servicesList.reduce((acc, s) => acc + s.monto, 0),
   }
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function Dashboard() {
         .from("Transacciones")
         .select("*")
         .eq("user_id", user.id)
-        .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
 
       if (error) {
         console.error("Error al obtener transacciones:", error.message)
@@ -119,6 +120,41 @@ export default function Dashboard() {
     else setTransactionsList(prev => prev.filter(t => t.id !== transactionToDelete.id));
   };
 
+  const handleAddService = async (service: services) => {
+    if (!user) return
+
+    const { data, error } = await supabase
+      .from("Servicios")
+      .insert([{ ...service, user_id: user.id }])
+      .select()
+
+    if (error) {
+      console.error("Error al agregar servicio:", error.message)
+    } else if (data && data.length > 0) {
+      setServicesList(prev => [data[0], ...prev])
+    }
+  }
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchServices = async () => {
+      const { data, error } = await supabase
+        .from("Servicios")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("proximo_pago", { ascending: true }) 
+
+      if (error) {
+        console.error("Error al obtener servicios:", error.message)
+      } else {
+        setServicesList(data)
+      }
+    }
+
+    fetchServices()
+  }, [user])
+
   if (!user) return <p>Cargando...</p>
 
   return (
@@ -145,7 +181,6 @@ export default function Dashboard() {
           onDelete={handleDeleteClick} // ahora abre el modal en vez de borrar directo
         />
 
-
         <UpcomingServices services={servicesList} />
 
         <EditTransactionModal
@@ -161,6 +196,9 @@ export default function Dashboard() {
           onConfirm={confirmDelete}
         />
       </div>
+
+      <ServiceForm userId={user.id} onAdd={handleAddService} />
+
     </div>
   )
 }
