@@ -10,6 +10,7 @@ import { supabase } from "../../supabaseClient"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
+import CategoryHistoryCard from "./components/CategoryHistoryCard"
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -173,6 +174,8 @@ export default function Dashboard() {
       <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
 
       <Charts transactions={transactionsList} />
+
+      <CategoryHistoryCard transactions={transactionsList} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <RecentTransactions

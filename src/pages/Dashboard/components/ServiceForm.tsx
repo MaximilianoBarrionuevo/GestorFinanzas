@@ -16,7 +16,6 @@ export default function ServiceForm({ userId, onAdd }: ServiceFormProps) {
     e.preventDefault()
     if (!nombre || !monto || !proximoPago) return
 
-    // 👇 sin "id"
     const newService: Omit<services, "id"> = {
       user_id: userId,
       nombre,
