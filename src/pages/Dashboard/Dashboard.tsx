@@ -6,7 +6,8 @@ import RecentTransactions from "./components/RecentTransactions"
 import UpcomingServices from "./components/UpcomingServices"
 import TransactionForm from "./components/TransactionForm"
 import { useAuth } from "../../Context/AuthContext"
-import { supabase } from "../../supabaseClient"
+import { transactionService } from "../../Services/TransactionService"
+import { servicesService } from "../../Services/ServicesService"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
@@ -39,16 +40,11 @@ export default function Dashboard() {
     if (!user) return
 
     const fetchTransactions = async () => {
-      const { data, error } = await supabase
-        .from("Transacciones")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("Error al obtener transacciones:", error.message)
-      } else {
+      try {
+        const data = await transactionService.getByUserId(user.id)
         setTransactionsList(data)
+      } catch (error) {
+        console.error("Error al obtener transacciones:", error)
       }
     }
 
@@ -58,15 +54,17 @@ export default function Dashboard() {
   const handleAddTransaction = async (transaction: transactions) => {
     if (!user) return
 
-    const { data, error } = await supabase
-      .from("Transacciones")
-      .insert([{ ...transaction, user_id: user.id }])
-      .select()
-
-    if (error) {
-      console.error("Error al agregar transacción:", error.message)
-    } else {
-      setTransactionsList(prev => [data[0], ...prev])
+    try {
+      const data = await transactionService.create(user.id, {
+        amount: transaction.amount,
+        category: transaction.category,
+        description: transaction.description,
+        date: transaction.date,
+        type: transaction.type,
+      })
+      setTransactionsList(prev => [data, ...prev])
+    } catch (error) {
+      console.error("Error al agregar transacción:", error)
     }
   }
 
@@ -87,18 +85,13 @@ export default function Dashboard() {
   }
 
   const handleEditTransaction = async (id: string, updatedData: Partial<transactions>) => {
-    const { data, error } = await supabase
-      .from("Transacciones")
-      .update(updatedData)
-      .eq("id", id)
-      .select()
-
-    if (error) {
-      console.error("Error al editar transacción:", error.message)
-    } else if (data && data.length > 0) {
+    try {
+      const data = await transactionService.update(id, updatedData)
       setTransactionsList(prev =>
-        prev.map(t => (t.id === id ? { ...t, ...data[0] } : t))
+        prev.map(t => (t.id === id ? { ...t, ...data } : t))
       )
+    } catch (error) {
+      console.error("Error al editar transacción:", error)
     }
   }
 
@@ -112,27 +105,29 @@ export default function Dashboard() {
 
   const confirmDelete = async () => {
     if (!transactionToDelete) return;
-    const { error } = await supabase
-      .from("Transacciones")
-      .delete()
-      .eq("id", transactionToDelete.id);
-
-    if (error) console.error("Error al eliminar:", error.message);
-    else setTransactionsList(prev => prev.filter(t => t.id !== transactionToDelete.id));
+    try {
+      await transactionService.remove(transactionToDelete.id)
+      setTransactionsList(prev => prev.filter(t => t.id !== transactionToDelete.id))
+      setIsDeleteOpen(false)
+      setTransactionToDelete(null)
+    } catch (error) {
+      console.error("Error al eliminar:", error)
+    }
   };
 
   const handleAddService = async (service: services) => {
     if (!user) return
 
-    const { data, error } = await supabase
-      .from("Servicios")
-      .insert([{ ...service, user_id: user.id }])
-      .select()
-
-    if (error) {
-      console.error("Error al agregar servicio:", error.message)
-    } else if (data && data.length > 0) {
-      setServicesList(prev => [data[0], ...prev])
+    try {
+      const data = await servicesService.create(user.id, {
+        nombre: service.nombre,
+        monto: service.monto,
+        frecuencia: service.frecuencia,
+        proximo_pago: service.proximo_pago,
+      })
+      setServicesList(prev => [data, ...prev])
+    } catch (error) {
+      console.error("Error al agregar servicio:", error)
     }
   }
 
@@ -140,16 +135,11 @@ export default function Dashboard() {
     if (!user) return
 
     const fetchServices = async () => {
-      const { data, error } = await supabase
-        .from("Servicios")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("proximo_pago", { ascending: true }) 
-
-      if (error) {
-        console.error("Error al obtener servicios:", error.message)
-      } else {
+      try {
+        const data = await servicesService.getByUserId(user.id)
         setServicesList(data)
+      } catch (error) {
+        console.error("Error al obtener servicios:", error)
       }
     }
 
@@ -181,7 +171,7 @@ export default function Dashboard() {
         <RecentTransactions
           transactions={transactionsList}
           onEdit={onEdit}
-          onDelete={handleDeleteClick} // ahora abre el modal en vez de borrar directo
+          onDelete={handleDeleteClick}
         />
 
         <UpcomingServices services={servicesList} />
