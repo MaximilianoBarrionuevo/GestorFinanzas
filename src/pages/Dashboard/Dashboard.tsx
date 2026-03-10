@@ -12,6 +12,7 @@ import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
 import CategoryHistoryCard from "./components/CategoryHistoryCard"
+import SavingsSection from "./components/SavingSections"
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -146,6 +147,28 @@ export default function Dashboard() {
     fetchServices()
   }, [user])
 
+  const handleUsdPurchase = async (arsCost: number, usdAmount: number, rate: number) => {
+    if (!user) return false
+
+    const today = new Date().toISOString().split("T")[0]
+
+    try {
+      const expense = await transactionService.create(user.id, {
+        amount: arsCost,
+        category: "Compra USD",
+        description: `Compra de USD ${usdAmount.toLocaleString("en-US")} a TCR ${rate.toLocaleString("es-AR")}`,
+        date: today,
+        type: "egreso",
+      })
+
+      setTransactionsList(prev => [expense, ...prev])
+      return true
+    } catch (error) {
+      console.error("Error al registrar compra de USD:", error)
+      return false
+    }
+  }
+
   if (!user) return <p>Cargando...</p>
 
   return (
@@ -160,6 +183,8 @@ export default function Dashboard() {
         </button>
       </div>
       <SummaryCards data={summaryData} />
+
+      <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
 
       <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
 

@@ -25,3 +25,8 @@ export type services = {
   created_at?: string
 }
 
+export type savingsBalance = {
+  user_id: string
+  ARS: number
+  USD: number
+}
