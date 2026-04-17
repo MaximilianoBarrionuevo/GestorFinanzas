@@ -184,13 +184,13 @@ export default function Dashboard() {
       </div>
       <SummaryCards data={summaryData} />
 
-      <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
-
       <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
 
       <Charts transactions={transactionsList} />
 
       <CategoryHistoryCard transactions={transactionsList} />
+
+      <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <RecentTransactions
@@ -200,6 +200,7 @@ export default function Dashboard() {
         />
 
         <UpcomingServices services={servicesList} />
+
 
         <EditTransactionModal
           isOpen={isEditOpen}
