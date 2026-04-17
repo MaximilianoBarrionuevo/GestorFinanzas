@@ -82,7 +82,7 @@ export default function Charts({ transactions }: Props) {
         <div className="space-y-6">
             {/* Resumen rápido */}
             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white rounded-lg shadow p-4 text-center">
+                 <div className="bg-white/90 border border-slate-100 rounded-2xl shadow p-4 text-center">
                     <p className="text-sm text-gray-500">Ingresos</p>
                     <p className="text-xl font-bold text-[#2E6F40]">
                         ${totalIngresos.toLocaleString()}
@@ -96,9 +96,9 @@ export default function Charts({ transactions }: Props) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+           <div className="bg-white/90 border border-slate-100 rounded-2xl shadow p-4 text-center">
                 {/* Pie Chart */}
-                <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
+                <div className="bg-white/90 border border-slate-100 rounded-2xl shadow-md p-4 flex flex-col items-center">
                     <div className="flex items-center justify-between w-full mb-2">
                         <h2 className="text-lg font-semibold text-[#2D2D2D]">Gastos por categoría</h2>
 
@@ -148,7 +148,7 @@ export default function Charts({ transactions }: Props) {
                 </div>
 
                 {/* Bar Chart */}
-                <div className="bg-[#F4F5F6] rounded-2xl shadow-md p-4 flex flex-col items-center">
+               <div className="bg-white/90 border border-slate-100 rounded-2xl shadow-md p-4 flex flex-col items-center">
                     <h2 className="text-lg font-semibold mb-2 text-[#2D2D2D]">Ingresos vs Egresos</h2>
                     <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={barData}>

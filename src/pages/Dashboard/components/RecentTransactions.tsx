@@ -9,14 +9,15 @@ type Props = {
 
 export default function RecentTransactions({ transactions, onDelete, onEdit }: Props) {
   return (
-    <div className="bg-white rounded-2xl shadow-md p-6 max-h-96 overflow-auto">
+   <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-6 max-h-96 overflow-auto">
+      <h2 className="text-xl font-bold mb-4 text-slate-900">Últimos movimientos</h2>
       <h2 className="text-xl font-bold mb-4 text-[#2E6F40]">Últimos movimientos</h2>
 
       <ul className="space-y-4">
         {transactions.map((t) => (
-          <li
+         <li
             key={t.id}
-            className="flex items-center justify-between bg-gray-50 rounded-xl p-4 hover:shadow-md transition"
+            className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl p-4 hover:shadow-md transition"
           >
             {/* Info de la transacción */}
             <div className="flex items-start space-x-3">

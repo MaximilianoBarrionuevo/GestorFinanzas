@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { transactions, services } from "../../types/types"
+import type { investmentPurchase, transactions, services } from "../../types/types"
 import SummaryCards from "./components/SummaryCards"
 import Charts from "./components/Charts"
 import RecentTransactions from "./components/RecentTransactions"
@@ -13,6 +13,7 @@ import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
 import CategoryHistoryCard from "./components/CategoryHistoryCard"
 import SavingsSection from "./components/SavingSections"
+import InvestmentSection from "./components/InvestmentSection"
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -69,6 +70,26 @@ export default function Dashboard() {
     }
   }
 
+  const handleRegisterInvestment = async (purchase: investmentPurchase) => {
+    if (!user) return false
+
+    try {
+      const expense = await transactionService.create(user.id, {
+        amount: purchase.totalCompra,
+        category: `Inversión ${purchase.tipo}`,
+        description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}`,
+        date: purchase.fechaCompra,
+        type: "egreso",
+      })
+
+      setTransactionsList(prev => [expense, ...prev])
+      return true
+    } catch (error) {
+      console.error("Error al registrar compra de activo:", error)
+      return false
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await logout()
@@ -96,13 +117,13 @@ export default function Dashboard() {
     }
   }
 
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState<transactions | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [transactionToDelete, setTransactionToDelete] = useState<transactions | null>(null)
 
   const handleDeleteClick = (transaction: transactions) => {
-    setTransactionToDelete(transaction);
-    setIsDeleteOpen(true);
-  };
+    setTransactionToDelete(transaction)
+    setIsDeleteOpen(true)
+  }
 
   const confirmDelete = async () => {
     if (!transactionToDelete) return;
@@ -172,25 +193,36 @@ export default function Dashboard() {
   if (!user) return <p>Cargando...</p>
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between">
-        <img src="./LogoCashFlow.webp" alt="Logo" className="h-12" />
+    <div className="p-4 md:p-8 space-y-6 md:space-y-7 text-slate-900">
+      <header className="rounded-3xl border border-emerald-100 bg-white/90 backdrop-blur-sm shadow-lg px-5 md:px-8 py-4 md:py-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <img src="./LogoCashFlow.webp" alt="Logo" className="h-11 md:h-12" />
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Panel financiero</p>
+            <h1 className="text-xl md:text-2xl font-semibold">Hola, {user.email}</h1>
+          </div>
+        </div>
+
         <button
           onClick={handleLogout}
-          className="px-4 py-2 bg-[#2E6F40] text-white rounded hover:bg-[#1f4e2a] transition"
+          className="px-4 py-2 bg-[#2E6F40] text-white rounded-xl hover:bg-[#1f4e2a] transition"
         >
           Cerrar sesión
         </button>
-      </div>
+      </header>
+
       <SummaryCards data={summaryData} />
 
-      <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
+        <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
+      </div>
+
+      <InvestmentSection userId={user.id} onRegisterPurchase={handleRegisterInvestment} />
 
       <Charts transactions={transactionsList} />
 
       <CategoryHistoryCard transactions={transactionsList} />
-
-      <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <RecentTransactions
@@ -200,24 +232,22 @@ export default function Dashboard() {
         />
 
         <UpcomingServices services={servicesList} />
-
-
-        <EditTransactionModal
-          isOpen={isEditOpen}
-          onClose={() => setIsEditOpen(false)}
-          onSave={handleEditTransaction}
-          transaction={selectedTransaction}
-        />
-
-        <ConfirmDeleteModal
-          isOpen={isDeleteOpen}
-          onClose={() => setIsDeleteOpen(false)}
-          onConfirm={confirmDelete}
-        />
       </div>
 
       <ServiceForm userId={user.id} onAdd={handleAddService} />
 
+      <EditTransactionModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        onSave={handleEditTransaction}
+        transaction={selectedTransaction}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

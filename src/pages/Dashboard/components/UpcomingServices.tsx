@@ -12,13 +12,13 @@ export default function UpcomingServices({ services }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-md p-6">
-      <h2 className="text-xl font-bold mb-4 text-gray-800">Próximos servicios</h2>
+    <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-6">
+      <h2 className="text-xl font-bold mb-4 text-slate-900">Próximos servicios</h2>
       <ul className="space-y-3">
         {services.map(s => (
           <li
             key={s.id}
-            className="flex justify-between items-center p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition"
+            className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 transition"
           >
             <div className="flex flex-col">
               <span className="font-medium text-gray-900">{s.nombre}</span>

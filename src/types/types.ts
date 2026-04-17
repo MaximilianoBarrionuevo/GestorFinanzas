@@ -30,3 +30,23 @@ export type savingsBalance = {
   ARS: number
   USD: number
 }
+
+export type investmentType = "CEDEAR" | "ACCION" | "CRYPTO" | "BONO" | "ETF" | "OTRO"
+export type investmentCurrency = "USD" | "ARS"
+
+export type investmentPurchase = {
+  id: string
+  user_id: string
+  broker: string
+  activo: string
+  tipo: investmentType
+  cantidad: number
+  precioCompra: number
+  moneda: investmentCurrency
+  fechaCompra: string
+  comision: number
+  totalCompra: number
+  created_at: string
+}
+
+export type newInvestmentPurchase = Omit<investmentPurchase, "id" | "user_id" | "created_at">
