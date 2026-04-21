@@ -45,7 +45,9 @@ export type investmentPurchase = {
   moneda: investmentCurrency
   fechaCompra: string
   comision: number
+  exchangeRate: number | null
   totalCompra: number
+  totalCompraArs: number
   created_at: string
 }
 

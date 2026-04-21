@@ -1,10 +1,11 @@
-import { ArrowDownRight, ArrowUpRight, Landmark, Wallet } from "lucide-react"
+import { PiggyBank, ArrowUpRight, Landmark, Wallet } from "lucide-react"
 
 type Props = {
   data: {
     saldo: number
     ingresos: number
     egresos: number
+    invertido: number
     servicios: number
   }
 }
@@ -26,10 +27,10 @@ export default function SummaryCards({ data }: Props) {
       textColor: "text-slate-800",
     },
     {
-      title: "Egresos",
-      value: data.egresos,
-      icon: ArrowDownRight,
-      color: "from-rose-100 to-orange-100",
+      title: "Invertido",
+      value: data.invertido,
+      icon: PiggyBank,
+      color: "from-cyan-100 to-blue-100",
       textColor: "text-slate-800",
     },
     {

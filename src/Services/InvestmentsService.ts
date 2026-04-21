@@ -12,7 +12,9 @@ type InvestmentRow = {
   moneda: investmentPurchase["moneda"]
   fecha_compra: string
   comision: number | null
+  exchange_rate?: number | null
   total_compra: number
+  total_compra_ars?: number | null
   created_at: string
 }
 
@@ -27,7 +29,9 @@ const toModel = (row: InvestmentRow): investmentPurchase => ({
   moneda: row.moneda,
   fechaCompra: row.fecha_compra,
   comision: Number(row.comision || 0),
+  exchangeRate: row.exchange_rate ? Number(row.exchange_rate) : null,
   totalCompra: Number(row.total_compra),
+  totalCompraArs: Number(row.total_compra_ars ?? row.total_compra),
   created_at: row.created_at,
 })
 
@@ -35,7 +39,7 @@ export const investmentsService = {
   async getByUserId(userId: string) {
     const { data, error } = await supabase
       .from("Inversiones")
-      .select("id, user_id, broker, activo, tipo, cantidad, precio_compra, moneda, fecha_compra, comision, total_compra, created_at")
+      .select("id, user_id, broker, activo, tipo, cantidad, precio_compra, moneda, fecha_compra, comision, exchange_rate, total_compra, total_compra_ars, created_at")
       .eq("user_id", userId)
       .order("fecha_compra", { ascending: false })
 
@@ -57,13 +61,15 @@ export const investmentsService = {
       moneda: purchase.moneda,
       fecha_compra: purchase.fechaCompra,
       comision: purchase.comision,
+      exchange_rate: purchase.exchangeRate,
       total_compra: purchase.totalCompra,
+      total_compra_ars: purchase.totalCompraArs,
     }
 
     const { data, error } = await supabase
       .from("Inversiones")
       .insert([payload])
-      .select("id, user_id, broker, activo, tipo, cantidad, precio_compra, moneda, fecha_compra, comision, total_compra, created_at")
+      .select("id, user_id, broker, activo, tipo, cantidad, precio_compra, moneda, fecha_compra, comision, exchange_rate, total_compra, total_compra_ars, created_at")
       .single()
 
     if (error) {

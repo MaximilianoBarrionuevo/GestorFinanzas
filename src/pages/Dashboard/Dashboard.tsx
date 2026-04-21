@@ -29,12 +29,17 @@ export default function Dashboard() {
     .filter(t => t.type === "egreso")
     .reduce((acc, t) => acc + t.amount, 0)
 
+  const totalInvertido = transactionsList
+    .filter(t => t.type === "egreso" && t.category.startsWith("Inversión"))
+    .reduce((acc, t) => acc + t.amount, 0)
+
   const saldo = totalIngresos - totalEgresos
 
   const summaryData = {
     saldo,
     ingresos: totalIngresos,
     egresos: totalEgresos,
+    invertido: totalInvertido,
     servicios: servicesList.reduce((acc, s) => acc + s.monto, 0),
   }
 
@@ -75,9 +80,9 @@ export default function Dashboard() {
 
     try {
       const expense = await transactionService.create(user.id, {
-        amount: purchase.totalCompra,
+        amount: purchase.totalCompraArs,
         category: `Inversión ${purchase.tipo}`,
-        description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}`,
+        description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}${purchase.exchangeRate ? ` (TCR ${purchase.exchangeRate.toLocaleString("es-AR")})` : ""}`,
         date: purchase.fechaCompra,
         type: "egreso",
       })
@@ -89,6 +94,7 @@ export default function Dashboard() {
       return false
     }
   }
+
 
   const handleLogout = async () => {
     try {
