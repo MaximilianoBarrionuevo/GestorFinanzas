@@ -19,22 +19,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate()
   const location = useLocation()
 
-   useEffect(() => {
-    // Cargar sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+  useEffect(() => {
+    const init = async () => {
+      try {
+        console.log("Iniciando sesión...");
 
-    // Escuchar cambios de auth
+        const { data, error } = await supabase.auth.getSession();
+
+        console.log("Resultado getSession:", { data, error });
+
+        if (error) throw error;
+
+        setUser(data.session?.user ?? null);
+      } catch (err) {
+        console.error("Error obteniendo sesión:", err);
+        setUser(null);
+      } finally {
+        console.log("Fin init");
+        setLoading(false);
+      }
+    };
+
+    init();
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
+      setUser(session?.user ?? null);
+    });
 
-    return () => {
-      listener.subscription.unsubscribe()
-    }
-  }, [])
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (user && location.pathname === "/") {
