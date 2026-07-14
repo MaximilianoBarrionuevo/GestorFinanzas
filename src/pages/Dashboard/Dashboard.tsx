@@ -14,9 +14,11 @@ import ServiceForm from "./components/ServiceForm"
 import CategoryHistoryCard from "./components/CategoryHistoryCard"
 import SavingsSection from "./components/SavingSections"
 import InvestmentSection from "./components/InvestmentSection"
+import { Navigate } from "react-router"
+import LoadingScreen from "../../components/LoadingScreen"
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
+  const { user, loading, logout } = useAuth()
 
   const [transactionsList, setTransactionsList] = useState<transactions[]>([])
   const [servicesList, setServicesList] = useState<services[]>([])
@@ -196,7 +198,11 @@ export default function Dashboard() {
     }
   }
 
-  if (!user) return <p>Cargando...</p>
+  if(loading) return <LoadingScreen />
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-7 text-slate-900">
