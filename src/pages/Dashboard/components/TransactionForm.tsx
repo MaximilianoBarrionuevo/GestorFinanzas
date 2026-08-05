@@ -35,7 +35,7 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
     setCategory("")
     setDescription("")
     setDate(today)
-    setType("ingreso")
+    setType("egreso")
   }
 
   return (

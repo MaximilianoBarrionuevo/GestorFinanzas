@@ -21,3 +21,18 @@ html, body, #root {
 .animate-loading {
   animation: loading 1.2s ease-in-out infinite;
 }
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out;
+}

@@ -1,51 +1,27 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { PiggyBank, Wallet } from "lucide-react"
-import { savingsService } from "../../../Services/SavingsService"
 import type { savingsBalance } from "../../../types/types"
 
 type Props = {
-  userId: string
+  savings: savingsBalance
+  loading: boolean
   availableBalance: number
   onUsdPurchase: (arsCost: number, usdAmount: number, exchangeRate: number) => Promise<boolean>
+  onUpdateSavings: (balances: { ARS: number; USD: number }) => Promise<boolean>
 }
 
 type Currency = "ARS" | "USD"
 type MovementType = "deposit" | "withdraw"
 
-const initialSavings: savingsBalance = {
-  user_id: "",
-  ARS: 0,
-  USD: 0,
-}
-
-export default function SavingsSection({ userId, availableBalance, onUsdPurchase }: Props) {
-  const [savings, setSavings] = useState<savingsBalance>(initialSavings)
+export default function SavingsSection({ savings, loading, availableBalance, onUsdPurchase, onUpdateSavings }: Props) {
   const [currency, setCurrency] = useState<Currency>("ARS")
   const [movementType, setMovementType] = useState<MovementType>("deposit")
   const [amount, setAmount] = useState<number>(0)
   const [exchangeRate, setExchangeRate] = useState<number>(0)
   const [error, setError] = useState<string>("")
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const isUsdPurchase = currency === "USD" && movementType === "deposit" && exchangeRate > 0
-
-  useEffect(() => {
-    const fetchBalances = async () => {
-      try {
-        setLoading(true)
-        const data = await savingsService.getByUserId(userId)
-        setSavings(data)
-      } catch (err) {
-        console.error("Error al obtener ahorros:", err)
-        setError("No se pudieron cargar tus ahorros")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBalances()
-  }, [userId])
 
   const applyMovement = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,13 +68,13 @@ export default function SavingsSection({ userId, availableBalance, onUsdPurchase
 
     try {
       setSaving(true)
-      const updated = await savingsService.updateByUserId(userId, nextBalances)
-      setSavings(updated)
+      const ok = await onUpdateSavings(nextBalances)
+      if (!ok) {
+        setError("No se pudo guardar el movimiento")
+        return
+      }
       setAmount(0)
       setExchangeRate(0)
-    } catch (err) {
-      console.error("Error al guardar ahorros:", err)
-      setError("No se pudo guardar el movimiento")
     } finally {
       setSaving(false)
     }

@@ -48,7 +48,35 @@ export type investmentPurchase = {
   exchangeRate: number | null
   totalCompra: number
   totalCompraArs: number
+  // Valuación actual (opcional): permite calcular ganancia/pérdida no realizada.
+  precioActual: number | null
+  tipoCambioActual: number | null
+  valorActualArs: number | null
+  actualizadoAt: string | null
   created_at: string
 }
 
-export type newInvestmentPurchase = Omit<investmentPurchase, "id" | "user_id" | "created_at">
+export type newInvestmentPurchase = Omit<
+  investmentPurchase,
+  "id" | "user_id" | "created_at" | "precioActual" | "tipoCambioActual" | "valorActualArs" | "actualizadoAt"
+>
+
+// Posición consolidada: agrupa todas las compras de un mismo activo+broker
+// para mostrar cantidad total, costo promedio y ganancia/pérdida.
+export type investmentPosition = {
+  key: string
+  broker: string
+  activo: string
+  tipo: investmentType
+  moneda: investmentCurrency
+  cantidadTotal: number
+  costoTotalArs: number
+  costoPromedioUnidad: number
+  precioActual: number | null
+  tipoCambioActual: number | null
+  valorActualArs: number | null
+  gananciaArs: number | null
+  gananciaPct: number | null
+  actualizadoAt: string | null
+  compras: investmentPurchase[]
+}

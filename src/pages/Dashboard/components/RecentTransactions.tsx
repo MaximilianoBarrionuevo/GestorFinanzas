@@ -10,7 +10,6 @@ type Props = {
 export default function RecentTransactions({ transactions, onDelete, onEdit }: Props) {
   return (
    <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-6 max-h-96 overflow-auto">
-      <h2 className="text-xl font-bold mb-4 text-slate-900">Últimos movimientos</h2>
       <h2 className="text-xl font-bold mb-4 text-[#2E6F40]">Últimos movimientos</h2>
 
       <ul className="space-y-4">

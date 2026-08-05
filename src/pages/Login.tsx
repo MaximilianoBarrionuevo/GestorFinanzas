@@ -1,8 +1,8 @@
 import { useForm } from "react-hook-form"
-import { supabase } from "../supabaseClient"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { useState } from "react"
-import { Mail, Lock } from "lucide-react"
+import { Mail, Lock, CheckCircle2 } from "lucide-react"
+import { useAuth } from "../Context/AuthContext"
 
 type LoginFormData = {
   email: string
@@ -11,6 +11,9 @@ type LoginFormData = {
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const justRegistered = Boolean((location.state as { justRegistered?: boolean } | null)?.justRegistered)
+  const { login } = useAuth()
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -24,30 +27,33 @@ export default function Login() {
     setLoading(true)
     setError("")
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    })
-
-    if (error) {
-      setError(error.message)
-    } else {
+    try {
+      await login(data.email, data.password)
       navigate("/dashboard")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[#2E6F40] via-[#6CB979] to-[#A0D861]">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 flex flex-col">
         <img src="./LogoCashFlow.webp" alt="Logo Cash Flow" className="w-full object-contain h-52" />
-        <h2 className="text-2xl font-bold text-center mb-6 text-[#2E6F40">
+        <h2 className="text-2xl font-bold text-center mb-6 text-[#2E6F40]">
           Bienvenido de nuevo
         </h2>
         <p className="text-sm text-center text-gray-500 mb-6">
           Inicia sesión para seguir gestionando tus finanzas
         </p>
+
+        {justRegistered && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg py-2 px-3">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Cuenta creada. Revisá tu email para confirmarla y después iniciá sesión.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Email */}

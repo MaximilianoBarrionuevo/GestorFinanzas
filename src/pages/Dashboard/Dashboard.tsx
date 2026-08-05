@@ -1,109 +1,103 @@
-import { useEffect, useState } from "react"
-import type { investmentPurchase, transactions, services } from "../../types/types"
+import { useMemo, useState } from "react"
+import { ArrowLeftRight, CalendarClock, LayoutDashboard, TrendingUp } from "lucide-react"
+import type { transactions } from "../../types/types"
 import SummaryCards from "./components/SummaryCards"
 import Charts from "./components/Charts"
 import RecentTransactions from "./components/RecentTransactions"
 import UpcomingServices from "./components/UpcomingServices"
 import TransactionForm from "./components/TransactionForm"
 import { useAuth } from "../../Context/AuthContext"
-import { transactionService } from "../../Services/TransactionService"
-import { servicesService } from "../../Services/ServicesService"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
 import CategoryHistoryCard from "./components/CategoryHistoryCard"
 import SavingsSection from "./components/SavingSections"
 import InvestmentSection from "./components/InvestmentSection"
-import { Navigate } from "react-router"
-import LoadingScreen from "../../components/LoadingScreen"
+import Tabs, { type TabItem } from "../../components/ui/Tabs"
+import { useTransactions } from "../../Hooks/useTransactions"
+import { useServices } from "../../Hooks/useServices"
+import { useInvestments } from "../../Hooks/useInvestments"
+import { useSavings } from "../../Hooks/useSavings"
+import { calcPeriodTotals, calcNetWorth, filterCurrentMonth } from "../../lib/Finance"
+
+const TABS: TabItem[] = [
+  { id: "resumen", label: "Resumen", icon: LayoutDashboard },
+  { id: "movimientos", label: "Movimientos", icon: ArrowLeftRight },
+  { id: "inversion", label: "Ahorro e inversión", icon: TrendingUp },
+  { id: "servicios", label: "Servicios", icon: CalendarClock },
+]
 
 export default function Dashboard() {
-  const { user, loading, logout } = useAuth()
+  const { user, logout } = useAuth()
+  const [activeTab, setActiveTab] = useState("resumen")
 
-  const [transactionsList, setTransactionsList] = useState<transactions[]>([])
-  const [servicesList, setServicesList] = useState<services[]>([])
+  const { transactionsList, addTransaction, editTransaction, removeTransaction } = useTransactions(user?.id)
+  const { servicesList, addService, removeService } = useServices(user?.id)
+  const {
+    positions,
+    loading: investmentsLoading,
+    addPurchase,
+    updatePositionCurrentValue,
+    removePurchase,
+  } = useInvestments(user?.id)
+  const { savings, loading: savingsLoading, updateSavings } = useSavings(user?.id)
 
-  const totalIngresos = transactionsList
-    .filter(t => t.type === "ingreso")
-    .reduce((acc, t) => acc + t.amount, 0)
+  // Totales históricos (para saldo líquido y total invertido a costo).
+  const historicos = useMemo(() => calcPeriodTotals(transactionsList), [transactionsList])
+  // Totales del mes en curso (para las cards de ingresos/egresos/tasa de ahorro).
+  const delMes = useMemo(() => calcPeriodTotals(filterCurrentMonth(transactionsList)), [transactionsList])
 
-  const totalEgresos = transactionsList
-    .filter(t => t.type === "egreso")
-    .reduce((acc, t) => acc + t.amount, 0)
+  const netWorth = useMemo(
+    () => calcNetWorth(historicos.saldo, savings.ARS, positions),
+    [historicos.saldo, savings.ARS, positions]
+  )
 
-  const totalInvertido = transactionsList
-    .filter(t => t.type === "egreso" && t.category.startsWith("Inversión"))
-    .reduce((acc, t) => acc + t.amount, 0)
-
-  const saldo = totalIngresos - totalEgresos
-
-  const summaryData = {
-    saldo,
-    ingresos: totalIngresos,
-    egresos: totalEgresos,
-    invertido: totalInvertido,
-    servicios: servicesList.reduce((acc, s) => acc + s.monto, 0),
-  }
-
-  useEffect(() => {
-    if (!user) return
-
-    const fetchTransactions = async () => {
-      try {
-        const data = await transactionService.getByUserId(user.id)
-        setTransactionsList(data)
-      } catch (error) {
-        console.error("Error al obtener transacciones:", error)
-      }
-    }
-
-    fetchTransactions()
-  }, [user])
+  const proximoServicio = useMemo(() => {
+    if (servicesList.length === 0) return null
+    return [...servicesList].sort((a, b) => a.proximo_pago.localeCompare(b.proximo_pago))[0]
+  }, [servicesList])
 
   const handleAddTransaction = async (transaction: transactions) => {
-    if (!user) return
-
-    try {
-      const data = await transactionService.create(user.id, {
-        amount: transaction.amount,
-        category: transaction.category,
-        description: transaction.description,
-        date: transaction.date,
-        type: transaction.type,
-      })
-      setTransactionsList(prev => [data, ...prev])
-    } catch (error) {
-      console.error("Error al agregar transacción:", error)
-    }
+    await addTransaction({
+      amount: transaction.amount,
+      category: transaction.category,
+      description: transaction.description,
+      date: transaction.date,
+      type: transaction.type,
+    })
   }
 
-  const handleRegisterInvestment = async (purchase: investmentPurchase) => {
-    if (!user) return false
+  const handleRegisterInvestment: React.ComponentProps<typeof InvestmentSection>["onRegisterPurchase"] = async purchase => {
+    const created = await addPurchase(purchase)
+    if (!created) return null
 
-    try {
-      const expense = await transactionService.create(user.id, {
-        amount: purchase.totalCompraArs,
-        category: `Inversión ${purchase.tipo}`,
-        description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}${purchase.exchangeRate ? ` (TCR ${purchase.exchangeRate.toLocaleString("es-AR")})` : ""}`,
-        date: purchase.fechaCompra,
-        type: "egreso",
-      })
+    await addTransaction({
+      amount: purchase.totalCompraArs,
+      category: `Inversión ${purchase.tipo}`,
+      description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}${
+        purchase.exchangeRate ? ` (TCR ${purchase.exchangeRate.toLocaleString("es-AR")})` : ""
+      }`,
+      date: purchase.fechaCompra,
+      type: "egreso",
+    })
 
-      setTransactionsList(prev => [expense, ...prev])
-      return true
-    } catch (error) {
-      console.error("Error al registrar compra de activo:", error)
-      return false
-    }
+    return created
   }
 
+  const handleUsdPurchase = async (arsCost: number, usdAmount: number, rate: number) => {
+    const todayStr = new Date().toISOString().split("T")[0]
+    const created = await addTransaction({
+      amount: arsCost,
+      category: "Compra USD",
+      description: `Compra de USD ${usdAmount.toLocaleString("en-US")} a TCR ${rate.toLocaleString("es-AR")}`,
+      date: todayStr,
+      type: "egreso",
+    })
+    return Boolean(created)
+  }
 
-  const handleLogout = async () => {
-    try {
-      await logout()
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-    }
+  const handleAddService: React.ComponentProps<typeof ServiceForm>["onAdd"] = async service => {
+    await addService(service)
   }
 
   const [selectedTransaction, setSelectedTransaction] = useState<transactions | null>(null)
@@ -112,17 +106,6 @@ export default function Dashboard() {
   const onEdit = (transaction: transactions) => {
     setSelectedTransaction(transaction)
     setIsEditOpen(true)
-  }
-
-  const handleEditTransaction = async (id: string, updatedData: Partial<transactions>) => {
-    try {
-      const data = await transactionService.update(id, updatedData)
-      setTransactionsList(prev =>
-        prev.map(t => (t.id === id ? { ...t, ...data } : t))
-      )
-    } catch (error) {
-      console.error("Error al editar transacción:", error)
-    }
   }
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -134,132 +117,103 @@ export default function Dashboard() {
   }
 
   const confirmDelete = async () => {
-    if (!transactionToDelete) return;
-    try {
-      await transactionService.remove(transactionToDelete.id)
-      setTransactionsList(prev => prev.filter(t => t.id !== transactionToDelete.id))
-      setIsDeleteOpen(false)
-      setTransactionToDelete(null)
-    } catch (error) {
-      console.error("Error al eliminar:", error)
-    }
-  };
-
-  const handleAddService = async (service: services) => {
-    if (!user) return
-
-    try {
-      const data = await servicesService.create(user.id, {
-        nombre: service.nombre,
-        monto: service.monto,
-        frecuencia: service.frecuencia,
-        proximo_pago: service.proximo_pago,
-      })
-      setServicesList(prev => [data, ...prev])
-    } catch (error) {
-      console.error("Error al agregar servicio:", error)
-    }
+    if (!transactionToDelete) return
+    await removeTransaction(transactionToDelete.id)
+    setIsDeleteOpen(false)
+    setTransactionToDelete(null)
   }
 
-  useEffect(() => {
-    if (!user) return
-
-    const fetchServices = async () => {
-      try {
-        const data = await servicesService.getByUserId(user.id)
-        setServicesList(data)
-      } catch (error) {
-        console.error("Error al obtener servicios:", error)
-      }
-    }
-
-    fetchServices()
-  }, [user])
-
-  const handleUsdPurchase = async (arsCost: number, usdAmount: number, rate: number) => {
-    if (!user) return false
-
-    const today = new Date().toISOString().split("T")[0]
-
-    try {
-      const expense = await transactionService.create(user.id, {
-        amount: arsCost,
-        category: "Compra USD",
-        description: `Compra de USD ${usdAmount.toLocaleString("en-US")} a TCR ${rate.toLocaleString("es-AR")}`,
-        date: today,
-        type: "egreso",
-      })
-
-      setTransactionsList(prev => [expense, ...prev])
-      return true
-    } catch (error) {
-      console.error("Error al registrar compra de USD:", error)
-      return false
-    }
-  }
-
-  if(loading) return <LoadingScreen />
-
-  if (!user) {
-    return <Navigate to="/login" replace />
+  const handleLogout = async () => {
+    await logout()
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-7 text-slate-900">
-      <header className="rounded-3xl border border-emerald-100 bg-white/90 backdrop-blur-sm shadow-lg px-5 md:px-8 py-4 md:py-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <img src="./LogoCashFlow.webp" alt="Logo" className="h-11 md:h-12" />
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Panel financiero</p>
-            <h1 className="text-xl md:text-2xl font-semibold">Hola, {user.email}</h1>
+    <div className="min-h-screen bg-[#F4F6F5]">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-7 text-slate-900 max-w-7xl mx-auto">
+        <header className="rounded-3xl border border-emerald-100 bg-white/90 backdrop-blur-sm shadow-lg px-5 md:px-8 py-4 md:py-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <img src="./LogoCashFlow.webp" alt="Logo" className="h-11 md:h-12" />
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Panel financiero</p>
+              <h1 className="text-xl md:text-2xl font-semibold">Hola, {user?.email}</h1>
+            </div>
           </div>
-        </div>
 
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-[#2E6F40] text-white rounded-xl hover:bg-[#1f4e2a] transition"
-        >
-          Cerrar sesión
-        </button>
-      </header>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-[#2E6F40] text-white rounded-xl hover:bg-[#1f4e2a] transition"
+          >
+            Cerrar sesión
+          </button>
+        </header>
 
-      <SummaryCards data={summaryData} />
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <TransactionForm userId={user.id} onAdd={handleAddTransaction} />
-        <SavingsSection userId={user.id} availableBalance={saldo} onUsdPurchase={handleUsdPurchase} />
-      </div>
-
-      <InvestmentSection userId={user.id} onRegisterPurchase={handleRegisterInvestment} />
-
-      <Charts transactions={transactionsList} />
-
-      <CategoryHistoryCard transactions={transactionsList} />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <RecentTransactions
-          transactions={transactionsList}
-          onEdit={onEdit}
-          onDelete={handleDeleteClick}
+        <SummaryCards
+          netWorth={netWorth}
+          ingresosMes={delMes.ingresos}
+          egresosMes={delMes.egresos}
+          tasaAhorro={delMes.tasaAhorro}
+          proximoServicio={proximoServicio}
         />
 
-        <UpcomingServices services={servicesList} />
+        <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+
+        {activeTab === "resumen" && (
+          <div className="space-y-6">
+            <Charts transactions={transactionsList} />
+            <CategoryHistoryCard transactions={transactionsList} />
+          </div>
+        )}
+
+        {activeTab === "movimientos" && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <TransactionForm userId={user?.id ?? ""} onAdd={handleAddTransaction} />
+            <RecentTransactions
+              transactions={transactionsList}
+              onEdit={onEdit}
+              onDelete={handleDeleteClick}
+            />
+          </div>
+        )}
+
+        {activeTab === "inversion" && (
+          <div className="space-y-6">
+            <SavingsSection
+              savings={savings}
+              loading={savingsLoading}
+              availableBalance={historicos.saldo}
+              onUsdPurchase={handleUsdPurchase}
+              onUpdateSavings={updateSavings}
+            />
+            <InvestmentSection
+              positions={positions}
+              loading={investmentsLoading}
+              onRegisterPurchase={handleRegisterInvestment}
+              onUpdatePositionValue={updatePositionCurrentValue}
+              onRemovePurchase={removePurchase}
+            />
+          </div>
+        )}
+
+        {activeTab === "servicios" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ServiceForm userId={user?.id ?? ""} onAdd={handleAddService} />
+            <UpcomingServices services={servicesList} onDelete={removeService} />
+          </div>
+        )}
+
+        <EditTransactionModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          onSave={editTransaction}
+          transaction={selectedTransaction}
+        />
+
+        <ConfirmDeleteModal
+          isOpen={isDeleteOpen}
+          onClose={() => setIsDeleteOpen(false)}
+          onConfirm={confirmDelete}
+        />
       </div>
-
-      <ServiceForm userId={user.id} onAdd={handleAddService} />
-
-      <EditTransactionModal
-        isOpen={isEditOpen}
-        onClose={() => setIsEditOpen(false)}
-        onSave={handleEditTransaction}
-        transaction={selectedTransaction}
-      />
-
-      <ConfirmDeleteModal
-        isOpen={isDeleteOpen}
-        onClose={() => setIsDeleteOpen(false)}
-        onConfirm={confirmDelete}
-      />
     </div>
   )
 }

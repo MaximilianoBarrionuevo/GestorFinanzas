@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "../supabaseClient"
 import type { User } from "@supabase/supabase-js"
 import { useNavigate, useLocation } from "react-router-dom"
+import { useToast } from "./ToastContext"
 
 type AuthContextType = {
   user: User | null
@@ -18,24 +19,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
+  const { showError } = useToast()
 
   useEffect(() => {
     const init = async () => {
       try {
-        console.log("Iniciando sesión...");
-
         const { data, error } = await supabase.auth.getSession();
-
-        console.log("Resultado getSession:", { data, error });
 
         if (error) throw error;
 
         setUser(data.session?.user ?? null);
       } catch (err) {
         console.error("Error obteniendo sesión:", err);
+        showError("No pudimos verificar tu sesión. Probá recargar la página.");
         setUser(null);
       } finally {
-        console.log("Fin init");
         setLoading(false);
       }
     };
@@ -64,10 +62,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     setLoading(true)
-    await supabase.auth.signOut()
-    setUser(null)
-    setLoading(false)
-    navigate('/')
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      navigate('/')
+    } catch (err) {
+      console.error("Error cerrando sesión:", err)
+      showError("No se pudo cerrar sesión. Intentá de nuevo.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const register = async (email: string, password: string) => {

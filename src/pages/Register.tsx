@@ -26,10 +26,9 @@ export default function Register() {
 
     try {
       await authService.register(data.email, data.password);
-      alert("Cuenta creada. Revisá tu email para confirmar.");
-      navigate("/login");
-    } catch (err: any) {
-      setError(err.message);
+      navigate("/login", { state: { justRegistered: true } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
     }
 
     setLoading(false);
