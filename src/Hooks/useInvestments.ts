@@ -78,6 +78,20 @@ export function useInvestments(userId: string | undefined) {
     [purchases, showError]
   )
 
+  const editPurchase = useCallback(
+    async (id: string, purchase: newInvestmentPurchase) => {
+      try {
+        const data = await investmentsService.update(id, purchase)
+        setPurchases(prev => prev.map(p => (p.id === id ? data : p)))
+        return true
+      } catch {
+        showError("No se pudo editar la compra. Intentá de nuevo.")
+        return false
+      }
+    },
+    [showError]
+  )
+
   const removePurchase = useCallback(
     async (id: string) => {
       try {
@@ -94,5 +108,5 @@ export function useInvestments(userId: string | undefined) {
 
   const positions = useMemo(() => buildInvestmentPositions(purchases), [purchases])
 
-  return { purchases, positions, loading, addPurchase, updatePositionCurrentValue, removePurchase }
+  return { purchases, positions, loading, addPurchase, updatePositionCurrentValue, editPurchase, removePurchase }
 }

@@ -1,28 +1,27 @@
 import { useMemo, useState } from "react"
 import {
   ChevronDown,
+  ChevronRight,
   Landmark,
   Plus,
-  RefreshCw,
-  Trash2,
   TrendingDown,
   TrendingUp,
   WalletCards,
   X,
 } from "lucide-react"
 import type { investmentPosition, investmentPurchase, newInvestmentPurchase } from "../../../types/types"
-import { formatArs, formatSigned } from "../../../lib/Finance"
+import { formatArs, formatSigned, calcAllocationByType } from "../../../lib/Finance"
 
 type Props = {
   positions: investmentPosition[]
   loading: boolean
   onRegisterPurchase: (purchase: newInvestmentPurchase) => Promise<investmentPurchase | null>
-  onUpdatePositionValue: (purchaseIds: string[], precioActual: number, tipoCambioActual: number | null) => Promise<boolean>
-  onRemovePurchase: (id: string) => Promise<boolean>
+  onOpenPosition: (position: investmentPosition) => void
 }
 
 type AssetType = "CEDEAR" | "ACCION" | "CRYPTO" | "BONO" | "ETF" | "OTRO"
 type Currency = "USD" | "ARS"
+type LoadMode = "monto" | "cantidad"
 
 const today = new Date().toISOString().split("T")[0]
 
@@ -34,8 +33,10 @@ const defaultForm = {
   broker: "",
   activo: "",
   tipo: "CEDEAR" as AssetType,
-  cantidad: 0,
-  precioCompra: 0,
+  loadMode: "monto" as LoadMode,
+  montoTotal: 0, // usado en modo "monto": cuánto invertiste en total
+  cantidad: 0, // usado en modo "cantidad": cuántas unidades compraste
+  precioCompra: 0, // precio por unidad, en ambos modos
   moneda: "USD" as Currency,
   fechaCompra: today,
   comision: 0,
@@ -55,22 +56,28 @@ export default function InvestmentSection({
   positions,
   loading,
   onRegisterPurchase,
-  onUpdatePositionValue,
-  onRemovePurchase,
+  onOpenPosition,
 }: Props) {
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState(defaultForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  const [valuationKey, setValuationKey] = useState<string | null>(null)
-  const [valuationPrice, setValuationPrice] = useState(0)
-  const [valuationRate, setValuationRate] = useState(0)
+
+  const cantidadCalculada = useMemo(() => {
+    if (form.loadMode === "cantidad") return form.cantidad
+    if (!form.montoTotal || !form.precioCompra) return 0
+    return form.montoTotal / form.precioCompra
+  }, [form.loadMode, form.cantidad, form.montoTotal, form.precioCompra])
 
   const totalCompra = useMemo(() => {
+    if (form.loadMode === "monto") {
+      // El monto que el usuario tipeó ya ES el total de la operación (sin comisión).
+      return (form.montoTotal || 0) + (form.comision || 0)
+    }
     if (!form.cantidad || !form.precioCompra) return 0
     return form.cantidad * form.precioCompra + (form.comision || 0)
-  }, [form.cantidad, form.precioCompra, form.comision])
+  }, [form.loadMode, form.montoTotal, form.cantidad, form.precioCompra, form.comision])
 
   const totalCompraArs = useMemo(() => {
     if (!totalCompra) return 0
@@ -94,8 +101,16 @@ export default function InvestmentSection({
     e.preventDefault()
     setError("")
 
-    if (!form.broker || !form.activo || !form.cantidad || !form.precioCompra || !form.fechaCompra) {
+    const cantidadValida = cantidadCalculada > 0
+    const montoBaseValido = form.loadMode === "monto" ? form.montoTotal > 0 : form.cantidad > 0
+
+    if (!form.broker || !form.activo || !montoBaseValido || !form.precioCompra || !form.fechaCompra) {
       setError("Completá todos los campos obligatorios")
+      return
+    }
+
+    if (!cantidadValida) {
+      setError("Revisá el monto y el precio: la cantidad calculada tiene que ser mayor a cero")
       return
     }
 
@@ -108,7 +123,7 @@ export default function InvestmentSection({
       broker: form.broker,
       activo: form.activo.toUpperCase(),
       tipo: form.tipo,
-      cantidad: form.cantidad,
+      cantidad: cantidadCalculada,
       precioCompra: form.precioCompra,
       moneda: form.moneda,
       fechaCompra: form.fechaCompra,
@@ -132,22 +147,6 @@ export default function InvestmentSection({
   }
 
   const assetSuggestions = form.tipo === "CRYPTO" ? cryptoSuggestions : cedearSuggestions
-
-  const openValuation = (position: investmentPosition) => {
-    setValuationKey(position.key)
-    setValuationPrice(position.precioActual ?? 0)
-    setValuationRate(position.tipoCambioActual ?? 0)
-  }
-
-  const submitValuation = async (position: investmentPosition) => {
-    if (!valuationPrice) return
-    const needsRate = position.moneda === "USD"
-    if (needsRate && !valuationRate) return
-
-    const ids = position.compras.map(c => c.id)
-    const ok = await onUpdatePositionValue(ids, valuationPrice, needsRate ? valuationRate : null)
-    if (ok) setValuationKey(null)
-  }
 
   if (loading) {
     return (
@@ -191,6 +190,8 @@ export default function InvestmentSection({
           )}
         </div>
       </div>
+
+      {positions.length > 0 && <AllocationBar positions={positions} />}
 
       {/* Botón para abrir el formulario de carga (antes estaba siempre abierto y ocupaba 9 campos de golpe) */}
       {!formOpen && (
@@ -277,23 +278,61 @@ export default function InvestmentSection({
 
           {/* Paso 2: cuánto */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">¿Cuánto?</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-              <div>
-                <label className="text-sm text-slate-700">Cantidad</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.00000001"
-                  value={form.cantidad || ""}
-                  onChange={e => updateForm("cantidad", Number(e.target.value))}
-                  className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  placeholder="0.5"
-                />
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">¿Cuánto?</p>
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => updateForm("loadMode", "monto")}
+                  className={`px-3 py-1.5 font-medium transition ${
+                    form.loadMode === "monto" ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  Por monto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateForm("loadMode", "cantidad")}
+                  className={`px-3 py-1.5 font-medium transition ${
+                    form.loadMode === "cantidad" ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  Por cantidad
+                </button>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+              {form.loadMode === "monto" ? (
+                <div>
+                  <label className="text-sm text-slate-700">Invertiste ({form.moneda})</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.montoTotal || ""}
+                    onChange={e => updateForm("montoTotal", Number(e.target.value))}
+                    className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    placeholder={form.moneda === "USD" ? "400" : "700000"}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-slate-700">Cantidad</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.00000001"
+                    value={form.cantidad || ""}
+                    onChange={e => updateForm("cantidad", Number(e.target.value))}
+                    className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    placeholder="0.5"
+                  />
+                </div>
+              )}
 
               <div>
-                <label className="text-sm text-slate-700">Precio por unidad</label>
+                <label className="text-sm text-slate-700">Cotización ({form.moneda}/u.)</label>
                 <input
                   type="number"
                   min={0}
@@ -301,7 +340,7 @@ export default function InvestmentSection({
                   value={form.precioCompra || ""}
                   onChange={e => updateForm("precioCompra", Number(e.target.value))}
                   className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  placeholder="100"
+                  placeholder={form.tipo === "CRYPTO" ? "64395.99" : "100"}
                 />
               </div>
 
@@ -333,6 +372,13 @@ export default function InvestmentSection({
                 />
               </div>
             </div>
+
+            {/* Cantidad resultante: en modo "monto" es el dato calculado, mostrado read-only para que quede claro qué se va a guardar */}
+            {form.loadMode === "monto" && form.montoTotal > 0 && form.precioCompra > 0 && (
+              <p className="text-xs text-slate-500 mt-2">
+                Eso son <span className="font-semibold text-slate-700">{cantidadCalculada.toLocaleString("es-AR", { maximumFractionDigits: 8 })}</span> unidades de {form.activo || "este activo"}.
+              </p>
+            )}
           </div>
 
           {/* Paso 3: costos, solo si aplica */}
@@ -396,145 +442,142 @@ export default function InvestmentSection({
       )}
 
       {/* Portfolio consolidado por posición */}
-      {positions.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-6">Todavía no cargaste ninguna inversión.</p>
-      ) : (
-        <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
-          {positions.map(position => {
-            const isExpanded = expandedKey === position.key
-            const isValuating = valuationKey === position.key
-            const ganancia = position.gananciaArs
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Detalle por activo {positions.length > 0 && `(${positions.length})`}
+        </p>
+        {positions.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Todavía no cargaste ninguna inversión.</p>
+        ) : (
+          <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
+            {positions.map(position => {
+              const ganancia = position.gananciaArs
+              const isExpanded = expandedKey === position.key
 
-            return (
-              <div key={position.key} className="bg-white">
-                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <button
-                    onClick={() => setExpandedKey(isExpanded ? null : position.key)}
-                    className="flex items-center gap-2 flex-1 min-w-[180px] text-left"
-                  >
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    <div>
-                      <p className="font-semibold text-slate-900">{position.activo}</p>
-                      <p className="text-xs text-slate-500">
-                        {tipoLabel[position.tipo]} · {position.broker} · {position.cantidadTotal.toLocaleString("es-AR")} u.
-                      </p>
-                    </div>
-                  </button>
-
-                  <div className="text-right">
-                    <p className="text-xs text-slate-400">Costo</p>
-                    <p className="text-sm font-medium text-slate-700">{formatArs(position.costoTotalArs)}</p>
-                  </div>
-
-                  <div className="text-right min-w-[110px]">
-                    <p className="text-xs text-slate-400">Valor actual</p>
-                    <p className="text-sm font-medium text-slate-900">
-                      {position.valorActualArs != null ? formatArs(position.valorActualArs) : "sin cargar"}
-                    </p>
-                  </div>
-
-                  <div className={`text-right min-w-[110px] ${ganancia == null ? "text-slate-300" : ganancia >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    <p className="text-xs opacity-70 inline-flex items-center gap-1 justify-end">
-                      {ganancia != null && (ganancia >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
-                      Ganancia
-                    </p>
-                    <p className="text-sm font-semibold">
-                      {ganancia != null ? `${formatSigned(ganancia)} (${position.gananciaPct?.toFixed(1)}%)` : "—"}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => (isValuating ? setValuationKey(null) : openValuation(position))}
-                    className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                    title="Actualizar valor actual"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {isValuating && (
-                  <div className="px-4 pb-4 flex flex-wrap items-end gap-3 bg-slate-50/60">
-                    <div>
-                      <label className="text-xs text-slate-600">Precio actual ({position.moneda}/u.)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.00000001"
-                        value={valuationPrice || ""}
-                        onChange={e => setValuationPrice(Number(e.target.value))}
-                        className="mt-1 w-40 rounded-lg border border-slate-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        placeholder="Ej: 145"
-                      />
-                    </div>
-                    {position.moneda === "USD" && (
-                      <div>
-                        <label className="text-xs text-slate-600">TCR actual</label>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={valuationRate || ""}
-                          onChange={e => setValuationRate(Number(e.target.value))}
-                          className="mt-1 w-32 rounded-lg border border-slate-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                          placeholder="Ej: 1350"
-                        />
-                      </div>
-                    )}
+              return (
+                <div key={position.key} className="bg-white">
+                  <div className="w-full flex flex-wrap items-center gap-3 px-4 py-3.5">
                     <button
-                      onClick={() => submitValuation(position)}
-                      className="h-9 px-4 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-700"
+                      onClick={() => setExpandedKey(isExpanded ? null : position.key)}
+                      className="flex-1 min-w-[180px] flex items-center gap-2 text-left"
                     >
-                      Guardar valor
+                      <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      <div>
+                        <p className="font-semibold text-slate-900">{position.activo}</p>
+                        <p className="text-xs text-slate-500">
+                          {tipoLabel[position.tipo]} · {position.broker} · {position.cantidadTotal.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u. · {position.compras.length} {position.compras.length === 1 ? "compra" : "compras"}
+                        </p>
+                      </div>
                     </button>
-                    {valuationPrice > 0 && (position.moneda !== "USD" || valuationRate > 0) && (
-                      <p className="text-xs text-slate-500">
-                        Nuevo valor: {formatArs(position.cantidadTotal * valuationPrice * (position.moneda === "USD" ? valuationRate : 1))}
-                      </p>
-                    )}
-                  </div>
-                )}
 
-                {isExpanded && (
-                  <div className="px-4 pb-4">
-                    <table className="w-full text-xs">
-                      <thead className="text-slate-400">
-                        <tr>
-                          <th className="text-left font-medium py-1.5">Fecha</th>
-                          <th className="text-right font-medium py-1.5">Cantidad</th>
-                          <th className="text-right font-medium py-1.5">Precio unitario</th>
-                          <th className="text-right font-medium py-1.5">Total</th>
-                          <th className="text-right font-medium py-1.5" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {position.compras.map(compra => (
-                          <tr key={compra.id} className="border-t border-slate-100">
-                            <td className="py-1.5 text-slate-600">{compra.fechaCompra}</td>
-                            <td className="py-1.5 text-right text-slate-600">{compra.cantidad.toLocaleString("es-AR")}</td>
-                            <td className="py-1.5 text-right text-slate-600">
-                              {compra.moneda} {compra.precioCompra.toLocaleString("es-AR")}
-                            </td>
-                            <td className="py-1.5 text-right text-slate-600">{formatArs(compra.totalCompraArs)}</td>
-                            <td className="py-1.5 text-right">
-                              <button
-                                onClick={() => onRemovePurchase(compra.id)}
-                                className="p-1 rounded hover:bg-rose-50 text-rose-500"
-                                title="Eliminar esta compra"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Costo</p>
+                      <p className="text-sm font-medium text-slate-700">{formatArs(position.costoTotalArs)}</p>
+                    </div>
+
+                    <div className="text-right min-w-[110px]">
+                      <p className="text-xs text-slate-400">Valor actual</p>
+                      <p className="text-sm font-medium text-slate-900">
+                        {position.valorActualArs != null ? formatArs(position.valorActualArs) : "sin cargar"}
+                      </p>
+                    </div>
+
+                    <div className={`text-right min-w-[110px] ${ganancia == null ? "text-slate-300" : ganancia >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      <p className="text-xs opacity-70 inline-flex items-center gap-1 justify-end">
+                        {ganancia != null && (ganancia >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
+                        Ganancia
+                      </p>
+                      <p className="text-sm font-semibold">
+                        {ganancia != null ? `${formatSigned(ganancia)} (${position.gananciaPct?.toFixed(1)}%)` : "—"}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => onOpenPosition(position)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 border border-emerald-200 rounded-lg px-2.5 py-1.5 shrink-0"
+                    >
+                      Ficha completa <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 bg-slate-50/60">
+                      <table className="w-full text-xs">
+                        <thead className="text-slate-400">
+                          <tr>
+                            <th className="text-left font-medium py-1.5">Fecha</th>
+                            <th className="text-right font-medium py-1.5">Cantidad</th>
+                            <th className="text-right font-medium py-1.5">Precio unitario</th>
+                            <th className="text-right font-medium py-1.5">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {position.compras.map(compra => (
+                            <tr key={compra.id} className="border-t border-slate-200/60">
+                              <td className="py-1.5 text-slate-600">{compra.fechaCompra}</td>
+                              <td className="py-1.5 text-right text-slate-600">
+                                {compra.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
+                              </td>
+                              <td className="py-1.5 text-right text-slate-600">
+                                {compra.moneda} {compra.precioCompra.toLocaleString("es-AR")}
+                              </td>
+                              <td className="py-1.5 text-right text-slate-600">{formatArs(compra.totalCompraArs)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Para editar o eliminar una compra puntual, o actualizar el valor de mercado, abrí la "Ficha completa".
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </section>
+  )
+}
+
+const ALLOCATION_COLORS: Record<string, string> = {
+  CEDEAR: "#2E6F40",
+  ACCION: "#5B8C5A",
+  CRYPTO: "#F0A500",
+  BONO: "#3B82F6",
+  ETF: "#8B5CF6",
+  OTRO: "#94A3B8",
+}
+
+function AllocationBar({ positions }: { positions: investmentPosition[] }) {
+  const allocation = useMemo(() => calcAllocationByType(positions), [positions])
+
+  if (allocation.length === 0) return null
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Distribución por tipo de activo</p>
+      <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-100">
+        {allocation.map(slice => (
+          <div
+            key={slice.tipo}
+            style={{ width: `${slice.pct}%`, backgroundColor: ALLOCATION_COLORS[slice.tipo] ?? "#94A3B8" }}
+            title={`${slice.tipo}: ${slice.pct.toFixed(1)}%`}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+        {allocation.map(slice => (
+          <span key={slice.tipo} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: ALLOCATION_COLORS[slice.tipo] ?? "#94A3B8" }}
+            />
+            {tipoLabel[slice.tipo as AssetType] ?? slice.tipo} · {slice.pct.toFixed(0)}%
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }

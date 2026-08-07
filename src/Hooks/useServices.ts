@@ -50,6 +50,20 @@ export function useServices(userId: string | undefined) {
     [userId, showError]
   )
 
+  const editService = useCallback(
+    async (id: string, updates: Partial<Omit<services, "id" | "user_id" | "created_at">>) => {
+      try {
+        const data = await servicesService.update(id, updates)
+        setServicesList(prev => prev.map(s => (s.id === id ? data : s)))
+        return data
+      } catch {
+        showError("No se pudo actualizar el servicio. Intentá de nuevo.")
+        return null
+      }
+    },
+    [showError]
+  )
+
   const removeService = useCallback(
     async (id: string) => {
       try {
@@ -64,5 +78,5 @@ export function useServices(userId: string | undefined) {
     [showError]
   )
 
-  return { servicesList, loading, addService, removeService }
+  return { servicesList, loading, addService, editService, removeService }
 }

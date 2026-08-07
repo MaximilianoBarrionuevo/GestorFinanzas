@@ -41,18 +41,43 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-6 border rounded-2xl bg-white shadow-md space-y-5"
+      className="p-6 border border-slate-100 rounded-2xl bg-white/90 backdrop-blur-sm shadow-md space-y-5"
     >
       <h2 className="text-xl font-bold text-[#2E6F40] text-center">
-        Agregar Transacción
+        Agregar transacción
       </h2>
+
+      {/* Tipo */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo</label>
+        <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setType("egreso")}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition ${
+              type === "egreso" ? "bg-rose-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <ArrowDownCircle className="w-4 h-4" /> Egreso
+          </button>
+          <button
+            type="button"
+            onClick={() => setType("ingreso")}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition ${
+              type === "ingreso" ? "bg-[#2E6F40] text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <ArrowUpCircle className="w-4 h-4" /> Ingreso
+          </button>
+        </div>
+      </div>
 
       {/* Monto */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Monto
         </label>
-        <div className="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#A0D861]">
+        <div className="flex items-center border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-200">
           <DollarSign className="w-5 h-5 text-gray-400 mr-2" />
           <input
             type="number"
@@ -69,7 +94,7 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Categoría
         </label>
-        <div className="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#A0D861]">
+        <div className="flex items-center border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-200">
           <Tag className="w-5 h-5 text-gray-400 mr-2" />
           <select
             value={category}
@@ -97,7 +122,7 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Descripción
         </label>
-        <div className="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#A0D861]">
+        <div className="flex items-center border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-200">
           <FileText className="w-5 h-5 text-gray-400 mr-2" />
           <input
             type="text"
@@ -114,7 +139,7 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Fecha
         </label>
-        <div className="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#A0D861]">
+        <div className="flex items-center border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-200">
           <Calendar className="w-5 h-5 text-gray-400 mr-2" />
           <input
             type="date"
@@ -125,32 +150,10 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         </div>
       </div>
 
-      {/* Tipo */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Tipo
-        </label>
-        <div className="flex items-center border rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#A0D861]">
-          {type === "ingreso" ? (
-            <ArrowUpCircle className="w-5 h-5 text-green-500 mr-2" />
-          ) : (
-            <ArrowDownCircle className="w-5 h-5 text-red-500 mr-2" />
-          )}
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as "ingreso" | "egreso")}
-            className="flex-1 outline-none text-sm bg-transparent"
-          >
-            <option value="ingreso">Ingreso</option>
-            <option value="egreso">Egreso</option>
-          </select>
-        </div>
-      </div>
-
       {/* Botón */}
       <button
         type="submit"
-        className="w-full bg-[#2E6F40] text-white py-2 rounded-lg hover:bg-[#1f4e2a] transition"
+        className="w-full bg-[#2E6F40] text-white py-2.5 rounded-xl hover:bg-[#1f4e2a] transition font-medium"
       >
         Agregar
       </button>

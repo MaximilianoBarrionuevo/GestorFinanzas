@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { ArrowLeftRight, CalendarClock, LayoutDashboard, TrendingUp } from "lucide-react"
-import type { transactions } from "../../types/types"
+import type { transactions, investmentPurchase } from "../../types/types"
 import SummaryCards from "./components/SummaryCards"
 import Charts from "./components/Charts"
 import RecentTransactions from "./components/RecentTransactions"
@@ -10,15 +10,19 @@ import { useAuth } from "../../Context/AuthContext"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
+import EditServiceModal from "./components/EditServiceModal"
 import CategoryHistoryCard from "./components/CategoryHistoryCard"
 import SavingsSection from "./components/SavingSections"
 import InvestmentSection from "./components/InvestmentSection"
+import PositionDetailModal from "./components/PositionDetailModal"
+import EditInvestmentModal from "./components/EditInvestmentModal"
 import Tabs, { type TabItem } from "../../components/ui/Tabs"
 import { useTransactions } from "../../Hooks/useTransactions"
 import { useServices } from "../../Hooks/useServices"
 import { useInvestments } from "../../Hooks/useInvestments"
 import { useSavings } from "../../Hooks/useSavings"
-import { calcPeriodTotals, calcNetWorth, filterCurrentMonth } from "../../lib/Finance"
+import { calcPeriodTotals, calcNetWorth, filterCurrentMonth, calcProximaFecha } from "../../lib/Finance"
+import type { services } from "../../types/types"
 
 const TABS: TabItem[] = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -32,12 +36,13 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("resumen")
 
   const { transactionsList, addTransaction, editTransaction, removeTransaction } = useTransactions(user?.id)
-  const { servicesList, addService, removeService } = useServices(user?.id)
+  const { servicesList, addService, editService, removeService } = useServices(user?.id)
   const {
     positions,
     loading: investmentsLoading,
     addPurchase,
     updatePositionCurrentValue,
+    editPurchase,
     removePurchase,
   } = useInvestments(user?.id)
   const { savings, loading: savingsLoading, updateSavings } = useSavings(user?.id)
@@ -84,6 +89,17 @@ export default function Dashboard() {
     return created
   }
 
+  // Estado del modal de detalle de una posición + edición de una compra puntual.
+  const [selectedPositionKey, setSelectedPositionKey] = useState<string | null>(null)
+  const selectedPosition = positions.find(p => p.key === selectedPositionKey) ?? null
+
+  const [editingPurchase, setEditingPurchase] = useState<investmentPurchase | null>(null)
+
+  const handleEditPurchaseSave = async (id: string, purchase: Parameters<typeof editPurchase>[1]) => {
+    await editPurchase(id, purchase)
+    setEditingPurchase(null)
+  }
+
   const handleUsdPurchase = async (arsCost: number, usdAmount: number, rate: number) => {
     const todayStr = new Date().toISOString().split("T")[0]
     const created = await addTransaction({
@@ -98,6 +114,39 @@ export default function Dashboard() {
 
   const handleAddService: React.ComponentProps<typeof ServiceForm>["onAdd"] = async service => {
     await addService(service)
+  }
+
+  // "Descontar": registra la transacción del período actual y mueve el vencimiento
+  // al siguiente automáticamente (mensual -> +1 mes, anual -> +1 año).
+  // Para servicios "único", ya no corresponde que sigan apareciendo, así que se eliminan.
+  const handlePayService = async (service: services) => {
+    if (!service.id) return
+
+    const created = await addTransaction({
+      amount: service.monto,
+      category: `Servicio: ${service.nombre}`,
+      description: `Pago de ${service.nombre} (vencimiento ${service.proximo_pago})`,
+      date: service.proximo_pago,
+      type: "egreso",
+    })
+
+    if (!created) return
+
+    if (service.frecuencia === "unico") {
+      await removeService(service.id)
+      return
+    }
+
+    const proximaFecha = calcProximaFecha(service.proximo_pago, service.frecuencia)
+    await editService(service.id, { proximo_pago: proximaFecha })
+  }
+
+  const [selectedService, setSelectedService] = useState<services | null>(null)
+  const [isEditServiceOpen, setIsEditServiceOpen] = useState(false)
+
+  const handleEditServiceClick = (service: services) => {
+    setSelectedService(service)
+    setIsEditServiceOpen(true)
   }
 
   const [selectedTransaction, setSelectedTransaction] = useState<transactions | null>(null)
@@ -188,8 +237,7 @@ export default function Dashboard() {
               positions={positions}
               loading={investmentsLoading}
               onRegisterPurchase={handleRegisterInvestment}
-              onUpdatePositionValue={updatePositionCurrentValue}
-              onRemovePurchase={removePurchase}
+              onOpenPosition={position => setSelectedPositionKey(position.key)}
             />
           </div>
         )}
@@ -197,7 +245,12 @@ export default function Dashboard() {
         {activeTab === "servicios" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ServiceForm userId={user?.id ?? ""} onAdd={handleAddService} />
-            <UpcomingServices services={servicesList} onDelete={removeService} />
+            <UpcomingServices
+              services={servicesList}
+              onPay={handlePayService}
+              onEdit={handleEditServiceClick}
+              onDelete={removeService}
+            />
           </div>
         )}
 
@@ -212,6 +265,28 @@ export default function Dashboard() {
           isOpen={isDeleteOpen}
           onClose={() => setIsDeleteOpen(false)}
           onConfirm={confirmDelete}
+        />
+
+        <EditServiceModal
+          isOpen={isEditServiceOpen}
+          onClose={() => setIsEditServiceOpen(false)}
+          onSave={editService}
+          service={selectedService}
+        />
+
+        <PositionDetailModal
+          position={selectedPosition}
+          onClose={() => setSelectedPositionKey(null)}
+          onUpdateValue={updatePositionCurrentValue}
+          onEditPurchase={purchase => setEditingPurchase(purchase)}
+          onRemovePurchase={removePurchase}
+        />
+
+        <EditInvestmentModal
+          isOpen={editingPurchase !== null}
+          onClose={() => setEditingPurchase(null)}
+          onSave={handleEditPurchaseSave}
+          purchase={editingPurchase}
         />
       </div>
     </div>

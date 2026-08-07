@@ -114,6 +114,39 @@ export const investmentsService = {
     return toModel(data as InvestmentRow)
   },
 
+  /** Corrige los datos de una compra ya cargada (fecha, cantidad, precio, etc). */
+  async update(
+    id: string,
+    purchase: Omit<newInvestmentPurchase, never>
+  ) {
+    const payload = {
+      broker: purchase.broker,
+      activo: purchase.activo,
+      tipo: purchase.tipo,
+      cantidad: purchase.cantidad,
+      precio_compra: purchase.precioCompra,
+      moneda: purchase.moneda,
+      fecha_compra: purchase.fechaCompra,
+      comision: purchase.comision,
+      exchange_rate: purchase.exchangeRate,
+      total_compra: purchase.totalCompra,
+      total_compra_ars: purchase.totalCompraArs,
+    }
+
+    const { data, error } = await supabase
+      .from("Inversiones")
+      .update(payload)
+      .eq("id", id)
+      .select(SELECT_COLUMNS)
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    return toModel(data as InvestmentRow)
+  },
+
   async remove(id: string) {
     const { error } = await supabase.from("Inversiones").delete().eq("id", id)
 

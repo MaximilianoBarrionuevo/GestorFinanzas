@@ -117,6 +117,63 @@ export function buildInvestmentPositions(purchases: investmentPurchase[]): inves
   })
 }
 
+/** Calcula la próxima fecha de vencimiento de un servicio recurrente, a partir de su vencimiento actual. */
+export function calcProximaFecha(fechaActual: string, frecuencia: "mensual" | "anual" | "unico"): string {
+  const [year, month, day] = fechaActual.split("-").map(Number)
+  const date = new Date(year, month - 1, day)
+
+  if (frecuencia === "mensual") date.setMonth(date.getMonth() + 1)
+  if (frecuencia === "anual") date.setFullYear(date.getFullYear() + 1)
+
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+/** Estado de vencimiento de un servicio, para decidir qué mostrar en la card. */
+export function calcEstadoServicio(proximoPago: string, now = new Date()) {
+  const todayStr = now.toISOString().split("T")[0]
+  const diffDays = Math.round(
+    (new Date(proximoPago).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  if (diffDays < 0) return { estado: "vencido" as const, diffDays }
+  if (diffDays <= 5) return { estado: "por_vencer" as const, diffDays }
+  return { estado: "vigente" as const, diffDays }
+}
+export type AllocationSlice = {
+  tipo: string
+  valorArs: number
+  pct: number
+}
+
+/** Distribución del portfolio por tipo de activo (CEDEAR, CRYPTO, etc), a valor actual si está disponible. */
+export function calcAllocationByType(positions: investmentPosition[]): AllocationSlice[] {
+  const totals = new Map<string, number>()
+
+  for (const p of positions) {
+    const valor = p.valorActualArs ?? p.costoTotalArs
+    totals.set(p.tipo, (totals.get(p.tipo) ?? 0) + valor)
+  }
+
+  const total = Array.from(totals.values()).reduce((a, b) => a + b, 0)
+
+  return Array.from(totals.entries())
+    .map(([tipo, valorArs]) => ({ tipo, valorArs, pct: total > 0 ? (valorArs / total) * 100 : 0 }))
+    .sort((a, b) => b.valorArs - a.valorArs)
+}
+
+/** Serie de costo acumulado invertido en una posición a lo largo del tiempo, para graficar. */
+export function calcCostoAcumulado(compras: investmentPurchase[]) {
+  const ordenadas = [...compras].sort((a, b) => a.fechaCompra.localeCompare(b.fechaCompra))
+  let acumulado = 0
+  return ordenadas.map(c => {
+    acumulado += c.totalCompraArs
+    return { fecha: c.fechaCompra, costoAcumulado: acumulado }
+  })
+}
+
 export type NetWorthSummary = {
   saldoLiquido: number
   ahorroArs: number
