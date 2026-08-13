@@ -62,14 +62,8 @@ export default function Dashboard() {
     return [...servicesList].sort((a, b) => a.proximo_pago.localeCompare(b.proximo_pago))[0]
   }, [servicesList])
 
-  const handleAddTransaction = async (transaction: transactions) => {
-    await addTransaction({
-      amount: transaction.amount,
-      category: transaction.category,
-      description: transaction.description,
-      date: transaction.date,
-      type: transaction.type,
-    })
+  const handleAddTransaction = async (transaction: Omit<transactions, "id" | "user_id">) => {
+    await addTransaction(transaction)
   }
 
   const handleRegisterInvestment: React.ComponentProps<typeof InvestmentSection>["onRegisterPurchase"] = async purchase => {
@@ -215,7 +209,7 @@ export default function Dashboard() {
 
         {activeTab === "movimientos" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <TransactionForm userId={user?.id ?? ""} onAdd={handleAddTransaction} />
+            <TransactionForm onAdd={handleAddTransaction} />
             <RecentTransactions
               transactions={transactionsList}
               onEdit={onEdit}

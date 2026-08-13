@@ -8,13 +8,6 @@ export type transactions = {
   type: "ingreso" | "egreso"
 }
 
-export type User = {
-  id: string;
-  email: string;
-  name: string;
-  created_at: string;
-};
-
 export type services = {
   id?: string
   user_id: string

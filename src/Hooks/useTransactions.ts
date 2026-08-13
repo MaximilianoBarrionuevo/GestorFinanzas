@@ -6,7 +6,7 @@ import { useToast } from "../Context/ToastContext"
 export function useTransactions(userId: string | undefined) {
   const [transactionsList, setTransactionsList] = useState<transactions[]>([])
   const [loading, setLoading] = useState(true)
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
 
   useEffect(() => {
     if (!userId) {
@@ -41,41 +41,46 @@ export function useTransactions(userId: string | undefined) {
       try {
         const data = await transactionService.create(userId, transaction)
         setTransactionsList(prev => [data, ...prev])
+        showSuccess("Transacción agregada")
         return data
       } catch {
         showError("No se pudo agregar la transacción. Intentá de nuevo.")
         return null
       }
     },
-    [userId, showError]
+    [userId, showError, showSuccess]
   )
 
   const editTransaction = useCallback(
     async (id: string, updatedData: Partial<transactions>) => {
+      if (!userId) return false
       try {
-        const data = await transactionService.update(id, updatedData)
+        const data = await transactionService.update(userId, id, updatedData)
         setTransactionsList(prev => prev.map(t => (t.id === id ? { ...t, ...data } : t)))
+        showSuccess("Transacción actualizada")
         return true
       } catch {
         showError("No se pudo editar la transacción. Intentá de nuevo.")
         return false
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   const removeTransaction = useCallback(
     async (id: string) => {
+      if (!userId) return false
       try {
-        await transactionService.remove(id)
+        await transactionService.remove(userId, id)
         setTransactionsList(prev => prev.filter(t => t.id !== id))
+        showSuccess("Transacción eliminada")
         return true
       } catch {
         showError("No se pudo eliminar la transacción. Intentá de nuevo.")
         return false
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   return { transactionsList, loading, addTransaction, editTransaction, removeTransaction }

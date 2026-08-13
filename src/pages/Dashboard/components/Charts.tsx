@@ -11,12 +11,17 @@ import {
     ResponsiveContainer,
     Legend,
 } from "recharts"
+import { ArrowDownRight, ArrowUpRight, BarChart3, PieChart as PieChartIcon } from "lucide-react"
 import type { transactions } from "../../../types/types"
+import { formatArs } from "../../../lib/Finance"
 import { isSameDay, isSameWeek, isSameMonth } from "date-fns"
 
 type Props = {
     transactions: transactions[]
 }
+
+const SELECT_CLASS =
+    "rounded-lg border border-slate-200 text-xs px-2.5 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
 
 export default function Charts({ transactions }: Props) {
     const [selectedCategory, setSelectedCategory] = useState<string>("Todas")
@@ -82,29 +87,42 @@ export default function Charts({ transactions }: Props) {
         <div className="space-y-6">
             {/* Resumen rápido */}
             <div className="grid grid-cols-2 gap-4">
-                 <div className="bg-white/90 border border-slate-100 rounded-2xl shadow p-4 text-center">
-                    <p className="text-sm text-gray-500">Ingresos</p>
-                    <p className="text-xl font-bold text-[#2E6F40]">
-                        ${totalIngresos.toLocaleString()}
-                    </p>
+                <div className="rounded-2xl border border-slate-100 bg-white/90 shadow-md p-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-xs md:text-sm text-slate-500">Ingresos</p>
+                            <p className="text-xl md:text-2xl font-bold mt-1 text-slate-900">{formatArs(totalIngresos)}</p>
+                        </div>
+                        <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                            <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5" />
+                        </span>
+                    </div>
                 </div>
-                <div className="bg-white rounded-lg shadow p-4 text-center">
-                    <p className="text-sm text-gray-500">Egresos</p>
-                    <p className="text-xl font-bold text-red-600">
-                        ${totalEgresos.toLocaleString()}
-                    </p>
+
+                <div className="rounded-2xl border border-slate-100 bg-white/90 shadow-md p-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-xs md:text-sm text-slate-500">Egresos</p>
+                            <p className="text-xl md:text-2xl font-bold mt-1 text-slate-900">{formatArs(totalEgresos)}</p>
+                        </div>
+                        <span className="p-2 rounded-xl bg-rose-50 text-rose-600">
+                            <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5" />
+                        </span>
+                    </div>
                 </div>
             </div>
 
-           <div className="bg-white/90 border border-slate-100 rounded-2xl shadow p-4 text-center">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Pie Chart */}
-                <div className="bg-white/90 border border-slate-100 rounded-2xl shadow-md p-4 flex flex-col items-center">
-                    <div className="flex items-center justify-between w-full mb-2">
-                        <h2 className="text-lg font-semibold text-[#2D2D2D]">Gastos por categoría</h2>
+                <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-4 md:p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+                            <PieChartIcon className="w-4 h-4 text-emerald-600" /> Gastos por categoría
+                        </h2>
 
                         <div className="flex gap-2">
                             <select
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className={SELECT_CLASS}
                                 value={selectedCategory}
                                 onChange={e => setSelectedCategory(e.target.value)}
                             >
@@ -117,7 +135,7 @@ export default function Charts({ transactions }: Props) {
                             </select>
 
                             <select
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className={SELECT_CLASS}
                                 value={selectedPeriod}
                                 onChange={e => setSelectedPeriod(e.target.value as "día" | "semana" | "mes")}
                             >
@@ -128,34 +146,34 @@ export default function Charts({ transactions }: Props) {
                         </div>
                     </div>
 
-                    <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                            <Pie
-                                data={dataByCategory}
-                                dataKey="value"
-                                nameKey="name"
-                                outerRadius={80}
-                                label
-                            >
-                                {dataByCategory.map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    {dataByCategory.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                                <Pie data={dataByCategory} dataKey="value" nameKey="name" outerRadius={80} label>
+                                    {dataByCategory.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value: number) => formatArs(value)} />
+                                <Legend />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <p className="text-sm text-slate-400 text-center py-16">No hay gastos para este período.</p>
+                    )}
                 </div>
 
                 {/* Bar Chart */}
-               <div className="bg-white/90 border border-slate-100 rounded-2xl shadow-md p-4 flex flex-col items-center">
-                    <h2 className="text-lg font-semibold mb-2 text-[#2D2D2D]">Ingresos vs Egresos</h2>
+                <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-4 md:p-5">
+                    <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2 mb-3">
+                        <BarChart3 className="w-4 h-4 text-emerald-600" /> Ingresos vs Egresos
+                    </h2>
                     <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={barData}>
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
-                            <Bar dataKey="value">
+                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip formatter={(value: number) => formatArs(value)} />
+                            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                                 {barData.map((entry, index) => (
                                     <Cell
                                         key={`cell-${index}`}

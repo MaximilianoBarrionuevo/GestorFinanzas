@@ -7,7 +7,7 @@ import { useToast } from "../Context/ToastContext"
 export function useInvestments(userId: string | undefined) {
   const [purchases, setPurchases] = useState<investmentPurchase[]>([])
   const [loading, setLoading] = useState(true)
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
 
   useEffect(() => {
     if (!userId) {
@@ -42,13 +42,14 @@ export function useInvestments(userId: string | undefined) {
       try {
         const data = await investmentsService.create(userId, purchase)
         setPurchases(prev => [data, ...prev])
+        showSuccess("Compra registrada")
         return data
       } catch {
         showError("No se pudo registrar la compra. Intentá de nuevo.")
         return null
       }
     },
-    [userId, showError]
+    [userId, showError, showSuccess]
   )
 
   /**
@@ -58,6 +59,7 @@ export function useInvestments(userId: string | undefined) {
    */
   const updatePositionCurrentValue = useCallback(
     async (purchaseIds: string[], precioActual: number, tipoCambioActual: number | null) => {
+      if (!userId) return false
       try {
         const updated = await Promise.all(
           purchaseIds.map(id => {
@@ -65,45 +67,50 @@ export function useInvestments(userId: string | undefined) {
             const valorActualArs = purchase
               ? purchase.cantidad * precioActual * (tipoCambioActual ?? 1)
               : 0
-            return investmentsService.updateCurrentValue(id, { precioActual, tipoCambioActual, valorActualArs })
+            return investmentsService.updateCurrentValue(userId, id, { precioActual, tipoCambioActual, valorActualArs })
           })
         )
         setPurchases(prev => prev.map(p => updated.find(u => u.id === p.id) ?? p))
+        showSuccess("Valor de mercado actualizado")
         return true
       } catch {
         showError("No se pudo actualizar el valor. Intentá de nuevo.")
         return false
       }
     },
-    [purchases, showError]
+    [userId, purchases, showError, showSuccess]
   )
 
   const editPurchase = useCallback(
     async (id: string, purchase: newInvestmentPurchase) => {
+      if (!userId) return false
       try {
-        const data = await investmentsService.update(id, purchase)
+        const data = await investmentsService.update(userId, id, purchase)
         setPurchases(prev => prev.map(p => (p.id === id ? data : p)))
+        showSuccess("Compra actualizada")
         return true
       } catch {
         showError("No se pudo editar la compra. Intentá de nuevo.")
         return false
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   const removePurchase = useCallback(
     async (id: string) => {
+      if (!userId) return false
       try {
-        await investmentsService.remove(id)
+        await investmentsService.remove(userId, id)
         setPurchases(prev => prev.filter(p => p.id !== id))
+        showSuccess("Compra eliminada")
         return true
       } catch {
         showError("No se pudo eliminar la compra. Intentá de nuevo.")
         return false
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   const positions = useMemo(() => buildInvestmentPositions(purchases), [purchases])

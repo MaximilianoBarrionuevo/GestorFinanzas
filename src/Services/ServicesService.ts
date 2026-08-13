@@ -33,11 +33,12 @@ export const servicesService = {
     return data as services
   },
 
-  async update(id: string, updatedData: UpdateService) {
+  async update(userId: string, id: string, updatedData: UpdateService) {
     const { data, error } = await supabase
       .from("Servicios")
       .update(updatedData)
       .eq("id", id)
+      .eq("user_id", userId)
       .select()
       .single()
 
@@ -48,19 +49,24 @@ export const servicesService = {
     return data as services
   },
 
-  async remove(id: string) {
-    const { error } = await supabase.from("Servicios").delete().eq("id", id)
+  async remove(userId: string, id: string) {
+    const { error } = await supabase
+      .from("Servicios")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       throw error
     }
   },
 
-  async getById(id: string) {
+  async getById(userId: string, id: string) {
     const { data, error } = await supabase
       .from("Servicios")
       .select("*")
       .eq("id", id)
+      .eq("user_id", userId)
       .single()
 
     if (error) {

@@ -10,6 +10,7 @@ type Props = {
 
 export default function EditTransactionModal({ isOpen, onClose, onSave, transaction }: Props) {
   const [formData, setFormData] = useState<Partial<transactions>>({})
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (transaction) {
@@ -20,6 +21,7 @@ export default function EditTransactionModal({ isOpen, onClose, onSave, transact
         date: transaction.date,
         description: transaction.description,
       })
+      setError("")
     }
   }, [transaction])
 
@@ -32,6 +34,18 @@ export default function EditTransactionModal({ isOpen, onClose, onSave, transact
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
+
+    if (!formData.category || !formData.date) {
+      setError("Completá la categoría y la fecha")
+      return
+    }
+
+    if (!formData.amount || formData.amount <= 0) {
+      setError("El monto tiene que ser mayor a cero")
+      return
+    }
+
     onSave(transaction.id, formData)
     onClose()
   }
@@ -59,6 +73,8 @@ export default function EditTransactionModal({ isOpen, onClose, onSave, transact
             <input
               type="number"
               name="amount"
+              min={0}
+              step="0.01"
               value={formData.amount || ""}
               onChange={handleChange}
               className="w-full border rounded-lg p-2 mt-1"
@@ -102,6 +118,8 @@ export default function EditTransactionModal({ isOpen, onClose, onSave, transact
               className="w-full border rounded-lg p-2 mt-1"
             />
           </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-end space-x-2 mt-4">
             <button

@@ -6,7 +6,7 @@ import { useToast } from "../Context/ToastContext"
 export function useServices(userId: string | undefined) {
   const [servicesList, setServicesList] = useState<services[]>([])
   const [loading, setLoading] = useState(true)
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
 
   useEffect(() => {
     if (!userId) {
@@ -41,41 +41,46 @@ export function useServices(userId: string | undefined) {
       try {
         const data = await servicesService.create(userId, service)
         setServicesList(prev => [data, ...prev])
+        showSuccess("Servicio agregado")
         return data
       } catch {
         showError("No se pudo agregar el servicio. Intentá de nuevo.")
         return null
       }
     },
-    [userId, showError]
+    [userId, showError, showSuccess]
   )
 
   const editService = useCallback(
     async (id: string, updates: Partial<Omit<services, "id" | "user_id" | "created_at">>) => {
+      if (!userId) return null
       try {
-        const data = await servicesService.update(id, updates)
+        const data = await servicesService.update(userId, id, updates)
         setServicesList(prev => prev.map(s => (s.id === id ? data : s)))
+        showSuccess("Servicio actualizado")
         return data
       } catch {
         showError("No se pudo actualizar el servicio. Intentá de nuevo.")
         return null
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   const removeService = useCallback(
     async (id: string) => {
+      if (!userId) return false
       try {
-        await servicesService.remove(id)
+        await servicesService.remove(userId, id)
         setServicesList(prev => prev.filter(s => s.id !== id))
+        showSuccess("Servicio eliminado")
         return true
       } catch {
         showError("No se pudo eliminar el servicio. Intentá de nuevo.")
         return false
       }
     },
-    [showError]
+    [userId, showError, showSuccess]
   )
 
   return { servicesList, loading, addService, editService, removeService }

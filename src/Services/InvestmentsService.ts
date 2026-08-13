@@ -92,6 +92,7 @@ export const investmentsService = {
 
   /** Actualiza el valor actual de una compra puntual (precio de mercado + TCR si aplica). */
   async updateCurrentValue(
+    userId: string,
     id: string,
     params: { precioActual: number; tipoCambioActual: number | null; valorActualArs: number }
   ) {
@@ -104,6 +105,7 @@ export const investmentsService = {
         actualizado_at: new Date().toISOString(),
       })
       .eq("id", id)
+      .eq("user_id", userId)
       .select(SELECT_COLUMNS)
       .single()
 
@@ -116,6 +118,7 @@ export const investmentsService = {
 
   /** Corrige los datos de una compra ya cargada (fecha, cantidad, precio, etc). */
   async update(
+    userId: string,
     id: string,
     purchase: Omit<newInvestmentPurchase, never>
   ) {
@@ -137,6 +140,7 @@ export const investmentsService = {
       .from("Inversiones")
       .update(payload)
       .eq("id", id)
+      .eq("user_id", userId)
       .select(SELECT_COLUMNS)
       .single()
 
@@ -147,8 +151,12 @@ export const investmentsService = {
     return toModel(data as InvestmentRow)
   },
 
-  async remove(id: string) {
-    const { error } = await supabase.from("Inversiones").delete().eq("id", id)
+  async remove(userId: string, id: string) {
+    const { error } = await supabase
+      .from("Inversiones")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       throw error

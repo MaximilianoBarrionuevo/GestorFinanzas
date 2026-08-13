@@ -8,7 +8,7 @@ const empty: savingsBalance = { user_id: "", ARS: 0, USD: 0 }
 export function useSavings(userId: string | undefined) {
   const [savings, setSavings] = useState<savingsBalance>(empty)
   const [loading, setLoading] = useState(true)
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
 
   useEffect(() => {
     if (!userId) {
@@ -43,13 +43,14 @@ export function useSavings(userId: string | undefined) {
       try {
         const updated = await savingsService.updateByUserId(userId, balances)
         setSavings(updated)
+        showSuccess("Movimiento de ahorro guardado")
         return true
       } catch {
         showError("No se pudo guardar el movimiento de ahorro.")
         return false
       }
     },
-    [userId, showError]
+    [userId, showError, showSuccess]
   )
 
   return { savings, loading, updateSavings }

@@ -2,34 +2,39 @@ import { useState } from "react"
 import type { transactions } from "../../../types/types"
 import { DollarSign, Calendar, FileText, Tag, ArrowDownCircle, ArrowUpCircle } from "lucide-react"
 
+type NewTransaction = Omit<transactions, "id" | "user_id">
+
 type TransactionFormProps = {
-  userId: string
-  onAdd: (transaction: transactions) => void
+  onAdd: (transaction: NewTransaction) => void | Promise<void>
 }
 
-export default function TransactionForm({ userId, onAdd }: TransactionFormProps) {
+export default function TransactionForm({ onAdd }: TransactionFormProps) {
   const today = new Date().toISOString().split("T")[0]
   const [amount, setAmount] = useState(0)
   const [category, setCategory] = useState("")
   const [description, setDescription] = useState("")
   const [date, setDate] = useState(today)
   const [type, setType] = useState<"ingreso" | "egreso">("egreso")
+  const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!amount || !category || !date || !type) return
+    setError("")
 
-    const newTransaction: transactions = {
-      id: Date.now().toString(),
-      user_id: userId,
-      amount,
-      category,
-      description,
-      date,
-      type,
+    if (!category || !date) {
+      setError("Completá la categoría y la fecha")
+      return
     }
 
-    onAdd(newTransaction)
+    if (!amount || amount <= 0) {
+      setError("Ingresá un monto mayor a cero")
+      return
+    }
+
+    setSaving(true)
+    await onAdd({ amount, category, description, date, type })
+    setSaving(false)
 
     setAmount(0)
     setCategory("")
@@ -81,6 +86,8 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
           <DollarSign className="w-5 h-5 text-gray-400 mr-2" />
           <input
             type="number"
+            min={0}
+            step="0.01"
             placeholder="Ej: 5000"
             value={amount || ""}
             onChange={(e) => setAmount(Number(e.target.value))}
@@ -150,12 +157,15 @@ export default function TransactionForm({ userId, onAdd }: TransactionFormProps)
         </div>
       </div>
 
+      {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
       {/* Botón */}
       <button
         type="submit"
-        className="w-full bg-[#2E6F40] text-white py-2.5 rounded-xl hover:bg-[#1f4e2a] transition font-medium"
+        disabled={saving}
+        className="w-full bg-[#2E6F40] text-white py-2.5 rounded-xl hover:bg-[#1f4e2a] transition font-medium disabled:opacity-60"
       >
-        Agregar
+        {saving ? "Agregando..." : "Agregar"}
       </button>
     </form>
   )

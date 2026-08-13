@@ -1,5 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { History } from "lucide-react"
 import type { transactions } from "../../../types/types"
+import { formatArs } from "../../../lib/Finance"
 
 type Props = {
     transactions: transactions[]
@@ -7,9 +9,17 @@ type Props = {
 
 export default function CategoryHistoryCard({ transactions }: Props) {
     // Obtener todas las categorías disponibles
-    const categories = Array.from(new Set(transactions.map(t => t.category)))
+    const categories = Array.from(new Set(transactions.map(t => t.category))).sort()
 
-    const [selectedCat, setSelectedCat] = useState<string>(categories[0] || "")
+    const [selectedCat, setSelectedCat] = useState<string>("")
+
+    // Si la categoría seleccionada ya no existe (o todavía no había ninguna
+    // cuando se montó el componente), sincronizarla con la primera disponible.
+    useEffect(() => {
+        if (categories.length > 0 && !categories.includes(selectedCat)) {
+            setSelectedCat(categories[0])
+        }
+    }, [categories, selectedCat])
 
     // Filtrar histórico completo por categoría
     const filtered = transactions.filter(t => t.category === selectedCat)
@@ -24,17 +34,30 @@ export default function CategoryHistoryCard({ transactions }: Props) {
 
     const balance = totalIngresos - totalEgresos
 
+    if (categories.length === 0) {
+        return (
+            <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-6">
+                <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+                    <History className="w-4 h-4 text-emerald-600" /> Balance histórico por categoría
+                </h2>
+                <p className="text-sm text-slate-400 text-center py-6">
+                    Todavía no hay movimientos para agrupar por categoría.
+                </p>
+            </div>
+        )
+    }
+
     return (
-        <div className="bg-white shadow-md rounded-xl p-5">
-            <div className="flex justify-between items-center mb-3">
-                <h2 className="text-lg font-semibold text-[#2D2D2D]">
-                    Balance histórico por categoría
+        <div className="bg-white/90 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-md p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+                    <History className="w-4 h-4 text-emerald-600" /> Balance histórico por categoría
                 </h2>
 
                 <select
                     value={selectedCat}
                     onChange={e => setSelectedCat(e.target.value)}
-                    className="border rounded-md px-2 py-1 text-sm"
+                    className="rounded-lg border border-slate-200 text-xs px-2.5 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 >
                     {categories.map(cat => (
                         <option key={cat} value={cat}>
@@ -44,25 +67,21 @@ export default function CategoryHistoryCard({ transactions }: Props) {
                 </select>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-[#F4F5F6] p-3 rounded-lg shadow">
-                    <p className="text-sm text-gray-500">Ingresos</p>
-                    <p className="text-xl font-bold text-[#2E6F40]">
-                        ${totalIngresos.toLocaleString()}
-                    </p>
+            <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
+                    <p className="text-xs text-slate-500">Ingresos</p>
+                    <p className="text-lg font-bold text-[#2E6F40] mt-0.5">{formatArs(totalIngresos)}</p>
                 </div>
 
-                <div className="bg-[#F4F5F6] p-3 rounded-lg shadow">
-                    <p className="text-sm text-gray-500">Egresos</p>
-                    <p className="text-xl font-bold text-red-600">
-                        ${totalEgresos.toLocaleString()}
-                    </p>
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
+                    <p className="text-xs text-slate-500">Egresos</p>
+                    <p className="text-lg font-bold text-red-600 mt-0.5">{formatArs(totalEgresos)}</p>
                 </div>
 
-                <div className="bg-[#F4F5F6] p-3 rounded-lg shadow">
-                    <p className="text-sm text-gray-500">Balance</p>
-                    <p className={`text-xl font-bold ${balance >= 0 ? "text-[#2E6F40]" : "text-red-600"}`}>
-                        ${balance.toLocaleString()}
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
+                    <p className="text-xs text-slate-500">Balance</p>
+                    <p className={`text-lg font-bold mt-0.5 ${balance >= 0 ? "text-[#2E6F40]" : "text-red-600"}`}>
+                        {balance >= 0 ? formatArs(balance) : `-${formatArs(Math.abs(balance))}`}
                     </p>
                 </div>
             </div>

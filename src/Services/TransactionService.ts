@@ -19,21 +19,6 @@ export const transactionService = {
     return data as transactions[]
   },
 
-  async getRecentByUserId(userId: string, limit = 20) {
-    const { data, error } = await supabase
-      .from("Transacciones")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(limit)
-
-    if (error) {
-      throw error
-    }
-
-    return data as transactions[]
-  },
-
   async create(userId: string, transaction: NewTransaction) {
     const { data, error } = await supabase
       .from("Transacciones")
@@ -48,11 +33,12 @@ export const transactionService = {
     return data as transactions
   },
 
-  async update(id: string, updatedData: UpdateTransaction) {
+  async update(userId: string, id: string, updatedData: UpdateTransaction) {
     const { data, error } = await supabase
       .from("Transacciones")
       .update(updatedData)
       .eq("id", id)
+      .eq("user_id", userId)
       .select()
       .single()
 
@@ -63,11 +49,12 @@ export const transactionService = {
     return data as transactions
   },
 
-  async getById(id: string) {
+  async getById(userId: string, id: string) {
     const { data, error } = await supabase
       .from("Transacciones")
       .select("*")
       .eq("id", id)
+      .eq("user_id", userId)
       .single()
 
     if (error) {
@@ -77,8 +64,12 @@ export const transactionService = {
     return data as transactions
   },
 
-  async remove(id: string) {
-    const { error } = await supabase.from("Transacciones").delete().eq("id", id)
+  async remove(userId: string, id: string) {
+    const { error } = await supabase
+      .from("Transacciones")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
 
     if (error) {
       throw error
