@@ -1,4 +1,14 @@
-import type { investmentPosition, investmentPurchase, services, transactions } from "../types/types"
+import type { investmentPosition, investmentPurchase, investmentType, services, transactions } from "../types/types"
+
+/** Etiquetas legibles para cada tipo de activo, compartidas entre la carga de compras y la ficha de posición. */
+export const tipoLabel: Record<investmentType, string> = {
+  CEDEAR: "CEDEAR",
+  ACCION: "Acción",
+  CRYPTO: "Crypto",
+  BONO: "Bono",
+  ETF: "ETF",
+  OTRO: "Otro",
+}
 
 export const formatArs = (value: number) =>
   `$${Math.round(value).toLocaleString("es-AR")}`

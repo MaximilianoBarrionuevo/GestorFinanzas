@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react"
 import type { investmentPosition, investmentPurchase, newInvestmentPurchase } from "../../../types/types"
-import { formatArs, formatSigned, calcAllocationByType } from "../../../lib/Finance"
+import { formatArs, formatSigned, calcAllocationByType, tipoLabel } from "../../../lib/Finance"
 
 type Props = {
   positions: investmentPosition[]
@@ -41,15 +41,6 @@ const defaultForm = {
   fechaCompra: today,
   comision: 0,
   exchangeRate: 0,
-}
-
-const tipoLabel: Record<AssetType, string> = {
-  CEDEAR: "CEDEAR",
-  ACCION: "Acción",
-  CRYPTO: "Crypto",
-  BONO: "Bono",
-  ETF: "ETF",
-  OTRO: "Otro",
 }
 
 export default function InvestmentSection({

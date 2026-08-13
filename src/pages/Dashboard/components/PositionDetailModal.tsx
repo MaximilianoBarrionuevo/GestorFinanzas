@@ -1,186 +1,257 @@
 import { useEffect, useState } from "react"
-import type { investmentPurchase, investmentType, newInvestmentPurchase } from "../../../types/types"
+import { X, Pencil, Trash2, TrendingUp, TrendingDown, RefreshCw, Landmark } from "lucide-react"
+import type { investmentPosition, investmentPurchase } from "../../../types/types"
+import { formatArs, formatSigned, tipoLabel } from "../../../lib/Finance"
+import ConfirmDeleteModal from "./ConfirmDeleteModal"
 
 type Props = {
-  isOpen: boolean
+  position: investmentPosition | null
   onClose: () => void
-  onSave: (id: string, purchase: newInvestmentPurchase) => void
-  purchase: investmentPurchase | null
+  onUpdateValue: (purchaseIds: string[], precioActual: number, tipoCambioActual: number | null) => Promise<boolean>
+  onEditPurchase: (purchase: investmentPurchase) => void
+  onRemovePurchase: (id: string) => Promise<boolean>
 }
 
-const tipos: investmentType[] = ["CEDEAR", "ACCION", "CRYPTO", "BONO", "ETF", "OTRO"]
-
-export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase }: Props) {
-  const [form, setForm] = useState<newInvestmentPurchase | null>(null)
+/**
+ * "Ficha completa" de una posición consolidada: resumen de costo/valor/ganancia,
+ * formulario para actualizar el precio de mercado (se aplica a todas las compras
+ * de la posición) y el detalle de cada compra individual con edición/borrado.
+ */
+export default function PositionDetailModal({
+  position,
+  onClose,
+  onUpdateValue,
+  onEditPurchase,
+  onRemovePurchase,
+}: Props) {
+  const [precioActual, setPrecioActual] = useState(0)
+  const [tipoCambioActual, setTipoCambioActual] = useState(0)
+  const [savingValue, setSavingValue] = useState(false)
+  const [valueError, setValueError] = useState("")
+  const [purchaseToDelete, setPurchaseToDelete] = useState<investmentPurchase | null>(null)
 
   useEffect(() => {
-    if (purchase) {
-      setForm({
-        broker: purchase.broker,
-        activo: purchase.activo,
-        tipo: purchase.tipo,
-        cantidad: purchase.cantidad,
-        precioCompra: purchase.precioCompra,
-        moneda: purchase.moneda,
-        fechaCompra: purchase.fechaCompra,
-        comision: purchase.comision,
-        exchangeRate: purchase.exchangeRate,
-        totalCompra: purchase.totalCompra,
-        totalCompraArs: purchase.totalCompraArs,
-      })
+    if (position) {
+      setPrecioActual(position.precioActual ?? 0)
+      setTipoCambioActual(position.tipoCambioActual ?? 0)
+      setValueError("")
     }
-  }, [purchase])
+  }, [position])
 
-  if (!isOpen || !purchase || !form) return null
+  if (!position) return null
 
-  const update = <K extends keyof newInvestmentPurchase>(key: K, value: newInvestmentPurchase[K]) => {
-    setForm(prev => (prev ? { ...prev, [key]: value } : prev))
-  }
+  const requiereTcr = position.moneda === "USD"
+  const ganancia = position.gananciaArs
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleUpdateValue = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form) return
+    setValueError("")
 
-    const totalCompra = form.cantidad * form.precioCompra + (form.comision || 0)
-    const totalCompraArs = form.moneda === "ARS" ? totalCompra : totalCompra * (form.exchangeRate || 0)
+    if (!precioActual || precioActual <= 0) {
+      setValueError("Ingresá un precio actual válido")
+      return
+    }
 
-    onSave(purchase.id, { ...form, totalCompra, totalCompraArs })
-    onClose()
+    if (requiereTcr && (!tipoCambioActual || tipoCambioActual <= 0)) {
+      setValueError("Esta posición está en USD: informá la TCR actual")
+      return
+    }
+
+    setSavingValue(true)
+    const ok = await onUpdateValue(
+      position.compras.map(c => c.id),
+      precioActual,
+      requiereTcr ? tipoCambioActual : null
+    )
+    setSavingValue(false)
+
+    if (!ok) setValueError("No se pudo actualizar el valor")
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-[#2E6F40] mb-4">Editar compra</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+    <>
+      <div className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-slate-100">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Activo</label>
-              <input
-                type="text"
-                value={form.activo}
-                onChange={e => update("activo", e.target.value.toUpperCase())}
-                className="w-full border rounded-lg p-2 mt-1"
-                required
-              />
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {tipoLabel[position.tipo]} · {position.broker}
+              </p>
+              <h2 className="text-2xl font-bold text-slate-900">{position.activo}</h2>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Broker</label>
-              <input
-                type="text"
-                value={form.broker}
-                onChange={e => update("broker", e.target.value)}
-                className="w-full border rounded-lg p-2 mt-1"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Tipo</label>
-            <select
-              value={form.tipo}
-              onChange={e => update("tipo", e.target.value as investmentType)}
-              className="w-full border rounded-lg p-2 mt-1"
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              aria-label="Cerrar ficha de la posición"
             >
-              {tipos.map(t => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Cantidad</label>
-              <input
-                type="number"
-                step="0.00000001"
-                value={form.cantidad || ""}
-                onChange={e => update("cantidad", Number(e.target.value))}
-                className="w-full border rounded-lg p-2 mt-1"
-                required
-              />
+          <div className="p-6 pt-4 space-y-6">
+            {/* Resumen */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                <p className="text-xs text-slate-500">Cantidad</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {position.cantidadTotal.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                <p className="text-xs text-slate-500">Costo total</p>
+                <p className="text-sm font-semibold text-slate-800">{formatArs(position.costoTotalArs)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                <p className="text-xs text-slate-500">Costo promedio / u.</p>
+                <p className="text-sm font-semibold text-slate-800">{formatArs(position.costoPromedioUnidad)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                <p className="text-xs text-slate-500">Valor actual</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {position.valorActualArs != null ? formatArs(position.valorActualArs) : "sin cargar"}
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Precio por unidad</label>
-              <input
-                type="number"
-                step="0.00000001"
-                value={form.precioCompra || ""}
-                onChange={e => update("precioCompra", Number(e.target.value))}
-                className="w-full border rounded-lg p-2 mt-1"
-                required
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Moneda</label>
-              <select
-                value={form.moneda}
-                onChange={e => update("moneda", e.target.value as "ARS" | "USD")}
-                className="w-full border rounded-lg p-2 mt-1"
+            {ganancia != null && (
+              <div
+                className={`rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-2 ${
+                  ganancia >= 0
+                    ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+                    : "bg-rose-50 border-rose-100 text-rose-700"
+                }`}
               >
-                <option value="USD">USD</option>
-                <option value="ARS">ARS</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Fecha</label>
-              <input
-                type="date"
-                value={form.fechaCompra}
-                onChange={e => update("fechaCompra", e.target.value)}
-                className="w-full border rounded-lg p-2 mt-1"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Comisión</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.comision || ""}
-                onChange={e => update("comision", Number(e.target.value))}
-                className="w-full border rounded-lg p-2 mt-1"
-              />
-            </div>
-            {form.moneda === "USD" && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">TCR</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.exchangeRate || ""}
-                  onChange={e => update("exchangeRate", Number(e.target.value))}
-                  className="w-full border rounded-lg p-2 mt-1"
-                  required
-                />
+                <p className="text-sm font-medium inline-flex items-center gap-2">
+                  {ganancia >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  Ganancia / pérdida no realizada
+                </p>
+                <p className="text-lg font-bold">
+                  {formatSigned(ganancia)} {position.gananciaPct != null && `(${position.gananciaPct.toFixed(1)}%)`}
+                </p>
               </div>
             )}
-          </div>
 
-          <div className="flex justify-end space-x-2 mt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100"
-            >
-              Cancelar
-            </button>
-            <button type="submit" className="px-4 py-2 rounded-lg bg-[#2E6F40] text-white hover:bg-[#1f4e2a]">
-              Guardar
-            </button>
+            {/* Actualizar valor de mercado */}
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <p className="text-sm font-semibold text-slate-700 mb-3 inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-emerald-600" /> Actualizar valor de mercado
+              </p>
+              <form onSubmit={handleUpdateValue} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                  <label className="text-sm text-slate-700">Precio actual ({position.moneda}/u.)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.00000001"
+                    value={precioActual || ""}
+                    onChange={e => setPrecioActual(Number(e.target.value))}
+                    className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+
+                {requiereTcr && (
+                  <div>
+                    <label className="text-sm text-slate-700">TCR actual</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={tipoCambioActual || ""}
+                      onChange={e => setTipoCambioActual(Number(e.target.value))}
+                      className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={savingValue}
+                  className="h-11 rounded-xl bg-[#2E6F40] text-white font-medium hover:bg-[#1f4e2a] transition disabled:opacity-60"
+                >
+                  {savingValue ? "Actualizando..." : "Actualizar"}
+                </button>
+              </form>
+              {valueError && <p className="text-sm text-red-600 mt-2">{valueError}</p>}
+              {position.actualizadoAt && (
+                <p className="text-xs text-slate-400 mt-2">
+                  Última actualización: {new Date(position.actualizadoAt).toLocaleString("es-AR")}
+                </p>
+              )}
+            </div>
+
+            {/* Detalle de compras */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 inline-flex items-center gap-1.5">
+                <Landmark className="w-3.5 h-3.5" /> Compras ({position.compras.length})
+              </p>
+              <div className="rounded-2xl border border-slate-100 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="text-left font-medium px-3 py-2">Fecha</th>
+                      <th className="text-right font-medium px-3 py-2">Cantidad</th>
+                      <th className="text-right font-medium px-3 py-2">Precio u.</th>
+                      <th className="text-right font-medium px-3 py-2">Total</th>
+                      <th className="text-right font-medium px-3 py-2">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {position.compras.map(compra => (
+                      <tr key={compra.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{compra.fechaCompra}</td>
+                        <td className="px-3 py-2 text-right text-slate-600">
+                          {compra.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                          {compra.moneda} {compra.precioCompra.toLocaleString("es-AR")}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                          {formatArs(compra.totalCompraArs)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => onEditPurchase(compra)}
+                              className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600"
+                              aria-label={`Editar compra del ${compra.fechaCompra}`}
+                              title="Editar compra"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setPurchaseToDelete(compra)}
+                              className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-rose-600"
+                              aria-label={`Eliminar compra del ${compra.fechaCompra}`}
+                              title="Eliminar compra"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDeleteModal
+        isOpen={purchaseToDelete !== null}
+        onClose={() => setPurchaseToDelete(null)}
+        onConfirm={async () => {
+          if (purchaseToDelete) await onRemovePurchase(purchaseToDelete.id)
+          setPurchaseToDelete(null)
+        }}
+        message={
+          purchaseToDelete
+            ? `¿Eliminar la compra del ${purchaseToDelete.fechaCompra} (${purchaseToDelete.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u.)? Esta acción no se puede deshacer.`
+            : undefined
+        }
+      />
+    </>
   )
 }
