@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { ArrowLeftRight, CalendarClock, CreditCard, LayoutDashboard, TrendingUp } from "lucide-react"
 import type { transactions, investmentPurchase } from "../../types/types"
 import SummaryCards from "./components/SummaryCards"
@@ -18,12 +19,14 @@ import InvestmentSection from "./components/InvestmentSection"
 import PositionDetailModal from "./components/PositionDetailModal"
 import EditInvestmentModal from "./components/EditInvestmentModal"
 import CreditCardsSection from "./components/CreditCardsSection"
+import MercadoPagoConnectionCard from "./components/MercadoPagoConnectionCard"
 import Tabs, { type TabItem } from "../../components/ui/Tabs"
 import { useTransactions } from "../../Hooks/useTransactions"
 import { useServices } from "../../Hooks/useServices"
 import { useInvestments } from "../../Hooks/useInvestments"
 import { useSavings } from "../../Hooks/useSavings"
 import { useCreditCards } from "../../Hooks/useCreditCards"
+import { useMercadoPago } from "../../Hooks/useMercadoPago"
 import { calcPeriodTotals, calcNetWorth, filterCurrentMonth, calcProximaFecha, currentCardCycleKey } from "../../lib/Finance"
 import type { services, creditCard, cardCycleSummary } from "../../types/types"
 
@@ -37,10 +40,12 @@ const TABS: TabItem[] = [
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
   const [activeTab, setActiveTab] = useState("resumen")
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const { transactionsList, addTransaction, editTransaction, removeTransaction } = useTransactions(user?.id)
+  const { transactionsList, addTransaction, editTransaction, removeTransaction, refetch: refetchTransactions } =
+    useTransactions(user?.id)
   const { servicesList, addService, editService, removeService } = useServices(user?.id)
   const {
     positions,
@@ -64,6 +69,42 @@ export default function Dashboard() {
     editExpense: editCardExpense,
     removeExpense: removeCardExpense,
   } = useCreditCards(user?.id)
+  const {
+    status: mpStatus,
+    loading: mpLoading,
+    connecting: mpConnecting,
+    syncing: mpSyncing,
+    connect: mpConnect,
+    disconnect: mpDisconnect,
+    sync: mpSync,
+  } = useMercadoPago(user?.id)
+
+  // Después de volver del login de Mercado Pago (ver api/mercadopago/callback.ts),
+  // mostramos un aviso según cómo salió y limpiamos el query param.
+  useEffect(() => {
+    const mp = searchParams.get("mp")
+    if (!mp) return
+
+    if (mp === "conectado") {
+      showSuccess("Mercado Pago conectado")
+    } else if (mp === "error") {
+      showError(`No se pudo conectar Mercado Pago (${searchParams.get("reason") ?? "error desconocido"})`)
+    }
+
+    const next = new URLSearchParams(searchParams)
+    next.delete("mp")
+    next.delete("reason")
+    setSearchParams(next, { replace: true })
+    // Solo queremos que esto corra al montar / cuando cambian los params de la URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  const handleMpSync = async () => {
+    const result = await mpSync()
+    if (result && result.imported > 0) {
+      await refetchTransactions()
+    }
+  }
 
   // Totales históricos (para saldo líquido y total invertido a costo).
   const historicos = useMemo(() => calcPeriodTotals(transactionsList), [transactionsList])
@@ -255,13 +296,24 @@ export default function Dashboard() {
         )}
 
         {activeTab === "movimientos" && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <TransactionForm onAdd={handleAddTransaction} />
-            <RecentTransactions
-              transactions={transactionsList}
-              onEdit={onEdit}
-              onDelete={handleDeleteClick}
+          <div className="space-y-6">
+            <MercadoPagoConnectionCard
+              status={mpStatus}
+              loading={mpLoading}
+              connecting={mpConnecting}
+              syncing={mpSyncing}
+              onConnect={mpConnect}
+              onDisconnect={mpDisconnect}
+              onSync={handleMpSync}
             />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <TransactionForm onAdd={handleAddTransaction} />
+              <RecentTransactions
+                transactions={transactionsList}
+                onEdit={onEdit}
+                onDelete={handleDeleteClick}
+              />
+            </div>
           </div>
         )}
 

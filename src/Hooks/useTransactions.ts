@@ -35,6 +35,18 @@ export function useTransactions(userId: string | undefined) {
     }
   }, [userId, showError])
 
+  // Para refrescar la lista después de que algo la modificó por fuera de este
+  // hook (ej: una sincronización con Mercado Pago via función serverless).
+  const refetch = useCallback(async () => {
+    if (!userId) return
+    try {
+      const data = await transactionService.getByUserId(userId)
+      setTransactionsList(data)
+    } catch {
+      showError("No pudimos actualizar tus transacciones. Probá recargar la página.")
+    }
+  }, [userId, showError])
+
   const addTransaction = useCallback(
     async (transaction: Omit<transactions, "id" | "user_id">) => {
       if (!userId) return null
@@ -83,5 +95,5 @@ export function useTransactions(userId: string | undefined) {
     [userId, showError, showSuccess]
   )
 
-  return { transactionsList, loading, addTransaction, editTransaction, removeTransaction }
+  return { transactionsList, loading, addTransaction, editTransaction, removeTransaction, refetch }
 }
