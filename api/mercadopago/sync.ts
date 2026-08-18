@@ -55,14 +55,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Método no permitido" })
   }
 
-  const userId = await getAuthenticatedUserId(req.headers.authorization)
-  if (!userId) {
-    return res.status(401).json({ error: "No autenticado" })
-  }
-
-  const admin = getAdminClient()
-
   try {
+    const userId = await getAuthenticatedUserId(req.headers.authorization)
+    if (!userId) {
+      return res.status(401).json({ error: "No autenticado" })
+    }
+
+    const admin = getAdminClient()
+
     const { data: tokens, error: tokensError } = await admin
       .from("MercadoPagoTokens")
       .select("access_token, refresh_token, expires_at, mp_user_id")
@@ -153,6 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ imported, revisados: aprobados.length })
   } catch (err) {
     console.error("mercadopago/sync", err)
-    return res.status(500).json({ error: "No se pudo sincronizar" })
+    const message = err instanceof Error ? err.message : "Error desconocido"
+    return res.status(500).json({ error: `No se pudo sincronizar: ${message}` })
   }
 }

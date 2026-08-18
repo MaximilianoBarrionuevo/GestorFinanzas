@@ -88,12 +88,15 @@ export default function Dashboard() {
     if (mp === "conectado") {
       showSuccess("Mercado Pago conectado")
     } else if (mp === "error") {
-      showError(`No se pudo conectar Mercado Pago (${searchParams.get("reason") ?? "error desconocido"})`)
+      const reason = searchParams.get("reason") ?? "error desconocido"
+      const detail = searchParams.get("detail")
+      showError(`No se pudo conectar Mercado Pago (${reason})${detail ? `: ${detail}` : ""}`)
     }
 
     const next = new URLSearchParams(searchParams)
     next.delete("mp")
     next.delete("reason")
+    next.delete("detail")
     setSearchParams(next, { replace: true })
     // Solo queremos que esto corra al montar / cuando cambian los params de la URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -7,12 +7,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Método no permitido" })
   }
 
-  const userId = await getAuthenticatedUserId(req.headers.authorization)
-  if (!userId) {
-    return res.status(401).json({ error: "No autenticado" })
-  }
-
   try {
+    const userId = await getAuthenticatedUserId(req.headers.authorization)
+    if (!userId) {
+      return res.status(401).json({ error: "No autenticado" })
+    }
+
     const { clientId, redirectUri } = getMpConfig()
     const state = signState(userId)
 
@@ -26,6 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ url: url.toString() })
   } catch (err) {
     console.error("mercadopago/connect", err)
-    return res.status(500).json({ error: "No se pudo generar el link de conexión" })
+    const message = err instanceof Error ? err.message : "Error desconocido"
+    return res.status(500).json({ error: `No se pudo generar el link de conexión: ${message}` })
   }
 }

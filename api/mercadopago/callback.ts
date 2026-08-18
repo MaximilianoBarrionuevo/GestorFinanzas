@@ -23,12 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return redirectToApp({ mp: "error", reason: "faltan_parametros" })
   }
 
-  const userId = verifyState(state)
-  if (!userId) {
-    return redirectToApp({ mp: "error", reason: "estado_invalido" })
-  }
-
   try {
+    const userId = verifyState(state)
+    if (!userId) {
+      return redirectToApp({ mp: "error", reason: "estado_invalido" })
+    }
+
     const { clientId, clientSecret, redirectUri } = getMpConfig()
 
     const tokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
@@ -76,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return redirectToApp({ mp: "conectado" })
   } catch (err) {
     console.error("mercadopago/callback", err)
-    return redirectToApp({ mp: "error", reason: "excepcion" })
+    const message = err instanceof Error ? err.message : "Error desconocido"
+    return redirectToApp({ mp: "error", reason: "excepcion", detail: message })
   }
 }
