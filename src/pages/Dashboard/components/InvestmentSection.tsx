@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import {
+  ArrowUpCircle,
   ChevronDown,
   ChevronRight,
   Landmark,
@@ -11,11 +12,12 @@ import {
 } from "lucide-react"
 import type { investmentPosition, investmentPurchase, newInvestmentPurchase } from "../../../types/types"
 import { formatArs, formatSigned, calcAllocationByType, tipoLabel } from "../../../lib/Finance"
+import RegisterSaleModal from "./RegisterSaleModal"
 
 type Props = {
   positions: investmentPosition[]
   loading: boolean
-  onRegisterPurchase: (purchase: newInvestmentPurchase) => Promise<investmentPurchase | null>
+  onRegisterOperation: (purchase: newInvestmentPurchase) => Promise<investmentPurchase | null>
   onOpenPosition: (position: investmentPosition) => void
 }
 
@@ -25,7 +27,7 @@ type LoadMode = "monto" | "cantidad"
 
 const today = new Date().toISOString().split("T")[0]
 
-const walletSuggestions = ["Binance", "Bybit", "Lemon", "Belo", "Ripio", "Satoshi Tango", "Ualá", "Mercado Pago"]
+const walletSuggestions = ["Binance", "Cocos", "Lemon", "Ualá", "Mercado Pago", "Nexo"]
 const cedearSuggestions = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "SPY"]
 const cryptoSuggestions = ["BTC", "ETH", "SOL", "USDT", "USDC", "BNB", "ADA", "XRP"]
 
@@ -46,10 +48,11 @@ const defaultForm = {
 export default function InvestmentSection({
   positions,
   loading,
-  onRegisterPurchase,
+  onRegisterOperation,
   onOpenPosition,
 }: Props) {
   const [formOpen, setFormOpen] = useState(false)
+  const [sellModalOpen, setSellModalOpen] = useState(false)
   const [form, setForm] = useState(defaultForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -81,7 +84,8 @@ export default function InvestmentSection({
     const costo = positions.reduce((acc, p) => acc + p.costoTotalArs, 0)
     const valorActual = positions.reduce((acc, p) => acc + (p.valorActualArs ?? p.costoTotalArs), 0)
     const ganancia = valorActual - costo
-    return { costo, valorActual, ganancia }
+    const gananciaRealizada = positions.reduce((acc, p) => acc + p.gananciaRealizadaArs, 0)
+    return { costo, valorActual, ganancia, gananciaRealizada }
   }, [positions])
 
   const updateForm = <K extends keyof typeof defaultForm>(key: K, value: (typeof defaultForm)[K]) => {
@@ -114,6 +118,7 @@ export default function InvestmentSection({
       broker: form.broker,
       activo: form.activo.toUpperCase(),
       tipo: form.tipo,
+      operacion: "compra",
       cantidad: cantidadCalculada,
       precioCompra: form.precioCompra,
       moneda: form.moneda,
@@ -125,7 +130,7 @@ export default function InvestmentSection({
     }
 
     setSaving(true)
-    const registered = await onRegisterPurchase(purchase)
+    const registered = await onRegisterOperation(purchase)
     setSaving(false)
 
     if (!registered) {
@@ -148,6 +153,7 @@ export default function InvestmentSection({
   }
 
   return (
+    <>
     <section className="rounded-3xl border border-emerald-100 bg-white/90 backdrop-blur-sm shadow-lg p-6 md:p-7 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -179,19 +185,39 @@ export default function InvestmentSection({
               <p className="text-lg font-bold">{formatSigned(totales.ganancia)}</p>
             </div>
           )}
+          {totales.gananciaRealizada !== 0 && (
+            <div
+              className={`rounded-2xl border px-4 py-2 ${
+                totales.gananciaRealizada >= 0
+                  ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+                  : "bg-rose-50 border-rose-100 text-rose-700"
+              }`}
+            >
+              <p className="text-xs opacity-80">Ganancia realizada</p>
+              <p className="text-lg font-bold">{formatSigned(totales.gananciaRealizada)}</p>
+            </div>
+          )}
         </div>
       </div>
 
       {positions.length > 0 && <AllocationBar positions={positions} />}
 
-      {/* Botón para abrir el formulario de carga (antes estaba siempre abierto y ocupaba 9 campos de golpe) */}
+      {/* Botones para abrir compra o venta (antes el formulario de compra estaba siempre abierto y ocupaba 9 campos de golpe) */}
       {!formOpen && (
-        <button
-          onClick={() => setFormOpen(true)}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition py-3 font-medium"
-        >
-          <Plus className="w-4 h-4" /> Registrar una compra
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => setFormOpen(true)}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition py-3 font-medium"
+          >
+            <Plus className="w-4 h-4" /> Registrar una compra
+          </button>
+          <button
+            onClick={() => setSellModalOpen(true)}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-rose-200 text-rose-700 hover:bg-rose-50 transition py-3 font-medium"
+          >
+            <ArrowUpCircle className="w-4 h-4" /> Registrar una venta
+          </button>
+        </div>
       )}
 
       {formOpen && (
@@ -442,11 +468,12 @@ export default function InvestmentSection({
         ) : (
           <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
             {positions.map(position => {
-              const ganancia = position.gananciaArs
+              const cerrada = position.cantidadTotal === 0
+              const ganancia = cerrada ? position.gananciaRealizadaArs : position.gananciaArs
               const isExpanded = expandedKey === position.key
 
               return (
-                <div key={position.key} className="bg-white">
+                <div key={position.key} className={cerrada ? "bg-slate-50/40" : "bg-white"}>
                   <div className="w-full flex flex-wrap items-center gap-3 px-4 py-3.5">
                     <button
                       onClick={() => setExpandedKey(isExpanded ? null : position.key)}
@@ -454,9 +481,16 @@ export default function InvestmentSection({
                     >
                       <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                       <div>
-                        <p className="font-semibold text-slate-900">{position.activo}</p>
+                        <p className="font-semibold text-slate-900 inline-flex items-center gap-1.5">
+                          {position.activo}
+                          {cerrada && (
+                            <span className="text-[10px] font-medium uppercase tracking-wide bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
+                              Cerrada
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {tipoLabel[position.tipo]} · {position.broker} · {position.cantidadTotal.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u. · {position.compras.length} {position.compras.length === 1 ? "compra" : "compras"}
+                          {tipoLabel[position.tipo]} · {position.broker} · {position.cantidadTotal.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u. · {position.compras.length} {position.compras.length === 1 ? "operación" : "operaciones"}
                         </p>
                       </div>
                     </button>
@@ -476,10 +510,14 @@ export default function InvestmentSection({
                     <div className={`text-right min-w-[110px] ${ganancia == null ? "text-slate-300" : ganancia >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       <p className="text-xs opacity-70 inline-flex items-center gap-1 justify-end">
                         {ganancia != null && (ganancia >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
-                        Ganancia
+                        {cerrada ? "Ganancia realizada" : "Ganancia"}
                       </p>
                       <p className="text-sm font-semibold">
-                        {ganancia != null ? `${formatSigned(ganancia)} (${position.gananciaPct?.toFixed(1)}%)` : "—"}
+                        {cerrada
+                          ? formatSigned(ganancia ?? 0)
+                          : ganancia != null
+                          ? `${formatSigned(ganancia)} (${position.gananciaPct?.toFixed(1)}%)`
+                          : "—"}
                       </p>
                     </div>
 
@@ -497,6 +535,7 @@ export default function InvestmentSection({
                         <thead className="text-slate-400">
                           <tr>
                             <th className="text-left font-medium py-1.5">Fecha</th>
+                            <th className="text-left font-medium py-1.5">Operación</th>
                             <th className="text-right font-medium py-1.5">Cantidad</th>
                             <th className="text-right font-medium py-1.5">Precio unitario</th>
                             <th className="text-right font-medium py-1.5">Total</th>
@@ -506,7 +545,19 @@ export default function InvestmentSection({
                           {position.compras.map(compra => (
                             <tr key={compra.id} className="border-t border-slate-200/60">
                               <td className="py-1.5 text-slate-600">{compra.fechaCompra}</td>
+                              <td className="py-1.5">
+                                <span
+                                  className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                    compra.operacion === "venta"
+                                      ? "bg-rose-100 text-rose-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                  }`}
+                                >
+                                  {compra.operacion === "venta" ? "Venta" : "Compra"}
+                                </span>
+                              </td>
                               <td className="py-1.5 text-right text-slate-600">
+                                {compra.operacion === "venta" ? "-" : "+"}
                                 {compra.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
                               </td>
                               <td className="py-1.5 text-right text-slate-600">
@@ -518,7 +569,7 @@ export default function InvestmentSection({
                         </tbody>
                       </table>
                       <p className="text-xs text-slate-400 mt-2">
-                        Para editar o eliminar una compra puntual, o actualizar el valor de mercado, abrí la "Ficha completa".
+                        Para editar o eliminar una operación puntual, o actualizar el valor de mercado, abrí la "Ficha completa".
                       </p>
                     </div>
                   )}
@@ -529,6 +580,14 @@ export default function InvestmentSection({
         )}
       </div>
     </section>
+
+    <RegisterSaleModal
+      isOpen={sellModalOpen}
+      onClose={() => setSellModalOpen(false)}
+      positions={positions}
+      onRegisterSale={onRegisterOperation}
+    />
+    </>
   )
 }
 

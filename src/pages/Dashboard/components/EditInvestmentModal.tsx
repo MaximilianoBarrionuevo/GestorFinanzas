@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import type { investmentPurchase, investmentType, newInvestmentPurchase } from "../../../types/types"
+import { ArrowDownCircle, ArrowUpCircle } from "lucide-react"
+import type { investmentOperation, investmentPurchase, investmentType, newInvestmentPurchase } from "../../../types/types"
 
 type Props = {
   isOpen: boolean
@@ -12,6 +13,7 @@ const tipos: investmentType[] = ["CEDEAR", "ACCION", "CRYPTO", "BONO", "ETF", "O
 
 export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase }: Props) {
   const [form, setForm] = useState<newInvestmentPurchase | null>(null)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (purchase) {
@@ -19,6 +21,7 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
         broker: purchase.broker,
         activo: purchase.activo,
         tipo: purchase.tipo,
+        operacion: purchase.operacion,
         cantidad: purchase.cantidad,
         precioCompra: purchase.precioCompra,
         moneda: purchase.moneda,
@@ -28,10 +31,13 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
         totalCompra: purchase.totalCompra,
         totalCompraArs: purchase.totalCompraArs,
       })
+      setError("")
     }
   }, [purchase])
 
   if (!isOpen || !purchase || !form) return null
+
+  const esVenta = form.operacion === "venta"
 
   const update = <K extends keyof newInvestmentPurchase>(key: K, value: newInvestmentPurchase[K]) => {
     setForm(prev => (prev ? { ...prev, [key]: value } : prev))
@@ -40,8 +46,24 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form) return
+    setError("")
 
-    const totalCompra = form.cantidad * form.precioCompra + (form.comision || 0)
+    if (!form.cantidad || form.cantidad <= 0) {
+      setError("La cantidad tiene que ser mayor a cero")
+      return
+    }
+    if (!form.precioCompra || form.precioCompra <= 0) {
+      setError("El precio por unidad tiene que ser mayor a cero")
+      return
+    }
+    if (form.moneda === "USD" && (!form.exchangeRate || form.exchangeRate <= 0)) {
+      setError("Informá la TCR: es obligatoria para operaciones en USD")
+      return
+    }
+
+    const bruto = form.cantidad * form.precioCompra
+    // Igual que al cargar: en una venta la comisión se descuenta de lo recibido, en una compra se suma a lo pagado.
+    const totalCompra = esVenta ? Math.max(0, bruto - (form.comision || 0)) : bruto + (form.comision || 0)
     const totalCompraArs = form.moneda === "ARS" ? totalCompra : totalCompra * (form.exchangeRate || 0)
 
     onSave(purchase.id, { ...form, totalCompra, totalCompraArs })
@@ -51,9 +73,30 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-xs z-50 p-4">
       <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-[#2E6F40] mb-4">Editar compra</h2>
+        <h2 className="text-xl font-bold text-[#2E6F40] mb-4">{esVenta ? "Editar venta" : "Editar compra"}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => update("operacion", "compra" as investmentOperation)}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition ${
+                !esVenta ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <ArrowDownCircle className="w-4 h-4" /> Compra
+            </button>
+            <button
+              type="button"
+              onClick={() => update("operacion", "venta" as investmentOperation)}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition ${
+                esVenta ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <ArrowUpCircle className="w-4 h-4" /> Venta
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700">Activo</label>
@@ -97,6 +140,7 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
               <label className="block text-sm font-medium text-gray-700">Cantidad</label>
               <input
                 type="number"
+                min={0}
                 step="0.00000001"
                 value={form.cantidad || ""}
                 onChange={e => update("cantidad", Number(e.target.value))}
@@ -105,9 +149,12 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Precio por unidad</label>
+              <label className="block text-sm font-medium text-gray-700">
+                {esVenta ? "Precio de venta" : "Precio de compra"} por unidad
+              </label>
               <input
                 type="number"
+                min={0}
                 step="0.00000001"
                 value={form.precioCompra || ""}
                 onChange={e => update("precioCompra", Number(e.target.value))}
@@ -143,9 +190,12 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Comisión</label>
+              <label className="block text-sm font-medium text-gray-700">
+                Comisión {esVenta && "(se descuenta de lo recibido)"}
+              </label>
               <input
                 type="number"
+                min={0}
                 step="0.01"
                 value={form.comision || ""}
                 onChange={e => update("comision", Number(e.target.value))}
@@ -157,6 +207,7 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
                 <label className="block text-sm font-medium text-gray-700">TCR</label>
                 <input
                   type="number"
+                  min={0}
                   step="0.01"
                   value={form.exchangeRate || ""}
                   onChange={e => update("exchangeRate", Number(e.target.value))}
@@ -166,6 +217,8 @@ export default function EditInvestmentModal({ isOpen, onClose, onSave, purchase 
               </div>
             )}
           </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-end space-x-2 mt-4">
             <button

@@ -1,5 +1,5 @@
 import { supabase } from "../supabaseClient"
-import type { investmentPurchase, newInvestmentPurchase } from "../types/types"
+import type { investmentOperation, investmentPurchase, newInvestmentPurchase } from "../types/types"
 
 type InvestmentRow = {
   id: string
@@ -7,6 +7,9 @@ type InvestmentRow = {
   broker: string
   activo: string
   tipo: investmentPurchase["tipo"]
+  // Opcional para tolerar filas cargadas antes de la migración que agrega
+  // esta columna (default "compra" en la base y acá).
+  operacion?: investmentOperation | null
   cantidad: number
   precio_compra: number
   moneda: investmentPurchase["moneda"]
@@ -28,6 +31,7 @@ const toModel = (row: InvestmentRow): investmentPurchase => ({
   broker: row.broker,
   activo: row.activo,
   tipo: row.tipo,
+  operacion: row.operacion ?? "compra",
   cantidad: Number(row.cantidad),
   precioCompra: Number(row.precio_compra),
   moneda: row.moneda,
@@ -44,7 +48,7 @@ const toModel = (row: InvestmentRow): investmentPurchase => ({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, broker, activo, tipo, cantidad, precio_compra, moneda, fecha_compra, comision, exchange_rate, total_compra, total_compra_ars, precio_actual, tipo_cambio_actual, valor_actual_ars, actualizado_at, created_at"
+  "id, user_id, broker, activo, tipo, operacion, cantidad, precio_compra, moneda, fecha_compra, comision, exchange_rate, total_compra, total_compra_ars, precio_actual, tipo_cambio_actual, valor_actual_ars, actualizado_at, created_at"
 
 export const investmentsService = {
   async getByUserId(userId: string) {
@@ -67,6 +71,7 @@ export const investmentsService = {
       broker: purchase.broker,
       activo: purchase.activo,
       tipo: purchase.tipo,
+      operacion: purchase.operacion,
       cantidad: purchase.cantidad,
       precio_compra: purchase.precioCompra,
       moneda: purchase.moneda,
@@ -126,6 +131,7 @@ export const investmentsService = {
       broker: purchase.broker,
       activo: purchase.activo,
       tipo: purchase.tipo,
+      operacion: purchase.operacion,
       cantidad: purchase.cantidad,
       precio_compra: purchase.precioCompra,
       moneda: purchase.moneda,

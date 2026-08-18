@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
-import { X, Pencil, Trash2, TrendingUp, TrendingDown, RefreshCw, Landmark } from "lucide-react"
+import { X, Pencil, Trash2, TrendingUp, TrendingDown, RefreshCw, Landmark, Zap } from "lucide-react"
 import type { investmentPosition, investmentPurchase } from "../../../types/types"
 import { formatArs, formatSigned, tipoLabel } from "../../../lib/Finance"
+import { fetchCurrentPrice, hasAutoPrice } from "../../../lib/MarketPrices"
 import ConfirmDeleteModal from "./ConfirmDeleteModal"
 
 type Props = {
@@ -28,6 +29,7 @@ export default function PositionDetailModal({
   const [tipoCambioActual, setTipoCambioActual] = useState(0)
   const [savingValue, setSavingValue] = useState(false)
   const [valueError, setValueError] = useState("")
+  const [fetchingPrice, setFetchingPrice] = useState(false)
   const [purchaseToDelete, setPurchaseToDelete] = useState<investmentPurchase | null>(null)
 
   useEffect(() => {
@@ -42,6 +44,23 @@ export default function PositionDetailModal({
 
   const requiereTcr = position.moneda === "USD"
   const ganancia = position.gananciaArs
+  // CoinGecko devuelve la cotización ya en la moneda de la posición (ARS o
+  // USD), así que no hace falta ningún tipo de cambio adicional para usarla.
+  const canAutoFetch = hasAutoPrice(position.activo, position.tipo)
+
+  const handleFetchPrice = async () => {
+    setValueError("")
+    setFetchingPrice(true)
+    const price = await fetchCurrentPrice(position.activo, position.tipo, position.moneda)
+    setFetchingPrice(false)
+
+    if (price == null) {
+      setValueError(`No pudimos traer la cotización automática de ${position.activo}. Cargala a mano.`)
+      return
+    }
+
+    setPrecioActual(price)
+  }
 
   const handleUpdateValue = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,6 +151,22 @@ export default function PositionDetailModal({
               </div>
             )}
 
+            {position.gananciaRealizadaArs !== 0 && (
+              <div
+                className={`rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-2 ${
+                  position.gananciaRealizadaArs >= 0
+                    ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+                    : "bg-rose-50 border-rose-100 text-rose-700"
+                }`}
+              >
+                <p className="text-sm font-medium inline-flex items-center gap-2">
+                  {position.gananciaRealizadaArs >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  Ganancia / pérdida realizada (ventas)
+                </p>
+                <p className="text-lg font-bold">{formatSigned(position.gananciaRealizadaArs)}</p>
+              </div>
+            )}
+
             {/* Actualizar valor de mercado */}
             <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
               <p className="text-sm font-semibold text-slate-700 mb-3 inline-flex items-center gap-2">
@@ -139,7 +174,20 @@ export default function PositionDetailModal({
               </p>
               <form onSubmit={handleUpdateValue} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                 <div>
-                  <label className="text-sm text-slate-700">Precio actual ({position.moneda}/u.)</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-sm text-slate-700">Precio actual ({position.moneda}/u.)</label>
+                    {canAutoFetch && (
+                      <button
+                        type="button"
+                        onClick={handleFetchPrice}
+                        disabled={fetchingPrice}
+                        className="shrink-0 text-xs font-medium text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 disabled:opacity-60"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        {fetchingPrice ? "Buscando..." : "Buscar precio"}
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min={0}
@@ -148,6 +196,9 @@ export default function PositionDetailModal({
                     onChange={e => setPrecioActual(Number(e.target.value))}
                     className="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
+                  {canAutoFetch && (
+                    <p className="text-[11px] text-slate-400 mt-1">Fuente: CoinGecko ({position.moneda})</p>
+                  )}
                 </div>
 
                 {requiereTcr && (
@@ -180,16 +231,17 @@ export default function PositionDetailModal({
               )}
             </div>
 
-            {/* Detalle de compras */}
+            {/* Detalle de operaciones */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 inline-flex items-center gap-1.5">
-                <Landmark className="w-3.5 h-3.5" /> Compras ({position.compras.length})
+                <Landmark className="w-3.5 h-3.5" /> Operaciones ({position.compras.length})
               </p>
               <div className="rounded-2xl border border-slate-100 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
                       <th className="text-left font-medium px-3 py-2">Fecha</th>
+                      <th className="text-left font-medium px-3 py-2">Operación</th>
                       <th className="text-right font-medium px-3 py-2">Cantidad</th>
                       <th className="text-right font-medium px-3 py-2">Precio u.</th>
                       <th className="text-right font-medium px-3 py-2">Total</th>
@@ -197,40 +249,53 @@ export default function PositionDetailModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {position.compras.map(compra => (
-                      <tr key={compra.id} className="border-t border-slate-100">
-                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{compra.fechaCompra}</td>
-                        <td className="px-3 py-2 text-right text-slate-600">
-                          {compra.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
-                          {compra.moneda} {compra.precioCompra.toLocaleString("es-AR")}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
-                          {formatArs(compra.totalCompraArs)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => onEditPurchase(compra)}
-                              className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600"
-                              aria-label={`Editar compra del ${compra.fechaCompra}`}
-                              title="Editar compra"
+                    {position.compras.map(compra => {
+                      const esVenta = compra.operacion === "venta"
+                      return (
+                        <tr key={compra.id} className="border-t border-slate-100">
+                          <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{compra.fechaCompra}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                esVenta ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"
+                              }`}
                             >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setPurchaseToDelete(compra)}
-                              className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-rose-600"
-                              aria-label={`Eliminar compra del ${compra.fechaCompra}`}
-                              title="Eliminar compra"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {esVenta ? "Venta" : "Compra"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-600">
+                            {esVenta ? "-" : "+"}
+                            {compra.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                            {compra.moneda} {compra.precioCompra.toLocaleString("es-AR")}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                            {formatArs(compra.totalCompraArs)}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => onEditPurchase(compra)}
+                                className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600"
+                                aria-label={`Editar ${esVenta ? "venta" : "compra"} del ${compra.fechaCompra}`}
+                                title="Editar"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setPurchaseToDelete(compra)}
+                                className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-rose-600"
+                                aria-label={`Eliminar ${esVenta ? "venta" : "compra"} del ${compra.fechaCompra}`}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -248,7 +313,7 @@ export default function PositionDetailModal({
         }}
         message={
           purchaseToDelete
-            ? `¿Eliminar la compra del ${purchaseToDelete.fechaCompra} (${purchaseToDelete.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u.)? Esta acción no se puede deshacer.`
+            ? `¿Eliminar la ${purchaseToDelete.operacion === "venta" ? "venta" : "compra"} del ${purchaseToDelete.fechaCompra} (${purchaseToDelete.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 8 })} u.)? Esta acción no se puede deshacer.`
             : undefined
         }
       />

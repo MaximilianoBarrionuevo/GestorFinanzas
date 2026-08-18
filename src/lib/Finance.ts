@@ -1,4 +1,14 @@
-import type { investmentPosition, investmentPurchase, investmentType, services, transactions } from "../types/types"
+import type {
+  cardCycleItem,
+  cardCycleSummary,
+  cardExpense,
+  creditCard,
+  investmentPosition,
+  investmentPurchase,
+  investmentType,
+  services,
+  transactions,
+} from "../types/types"
 
 /** Etiquetas legibles para cada tipo de activo, compartidas entre la carga de compras y la ficha de posición. */
 export const tipoLabel: Record<investmentType, string> = {
@@ -68,9 +78,10 @@ export function calcRunwayMeses(saldo: number, gastoFijoMensual: number): number
 }
 
 /**
- * Agrupa compras individuales de inversión en posiciones consolidadas por
- * activo + broker, calculando costo promedio y ganancia/pérdida si hay
- * valuación actual cargada.
+ * Agrupa operaciones (compras y ventas) de inversión en posiciones
+ * consolidadas por activo + broker + tipo, llevando el costo promedio
+ * ponderado de lo que queda tenido y la ganancia/pérdida realizada por
+ * ventas, además de la no realizada si hay valuación actual cargada.
  */
 export function buildInvestmentPositions(purchases: investmentPurchase[]): investmentPosition[] {
   const groups = new Map<string, investmentPurchase[]>()
@@ -82,14 +93,46 @@ export function buildInvestmentPositions(purchases: investmentPurchase[]): inves
     groups.set(key, arr)
   }
 
-  return Array.from(groups.entries()).map(([key, compras]) => {
+  return Array.from(groups.entries()).map(([key, ops]) => {
     const [broker, activo, tipo] = key.split("::") as [string, string, investmentPurchase["tipo"]]
-    const cantidadTotal = compras.reduce((acc, c) => acc + c.cantidad, 0)
-    const costoTotalArs = compras.reduce((acc, c) => acc + c.totalCompraArs, 0)
+
+    // Procesamos las operaciones en orden cronológico llevando costo promedio
+    // ponderado: cada venta reduce cantidad y costo en proporción al costo
+    // promedio vigente en ese momento; la diferencia contra lo recibido en
+    // la venta es ganancia/pérdida realizada.
+    // "fechaCompra" solo tiene precisión de día: si dos operaciones caen el
+    // mismo día (típico al cargar todo junto), se desempata por created_at
+    // (con hora) para respetar el orden real en que se cargaron.
+    const cronologico = [...ops].sort((a, b) => {
+      const porFecha = a.fechaCompra.localeCompare(b.fechaCompra)
+      if (porFecha !== 0) return porFecha
+      return a.created_at.localeCompare(b.created_at)
+    })
+
+    let cantidadTotal = 0
+    let costoTotalArs = 0
+    let gananciaRealizadaArs = 0
+
+    for (const op of cronologico) {
+      if (op.operacion === "venta") {
+        const costoPromedioVigente = cantidadTotal > 0 ? costoTotalArs / cantidadTotal : 0
+        // Por las dudas, nunca "vender" más de lo que la posición tenía hasta ese momento.
+        const cantidadVendida = Math.min(op.cantidad, cantidadTotal)
+        const costoDeLoVendido = cantidadVendida * costoPromedioVigente
+
+        gananciaRealizadaArs += op.totalCompraArs - costoDeLoVendido
+        cantidadTotal -= cantidadVendida
+        costoTotalArs -= costoDeLoVendido
+      } else {
+        cantidadTotal += op.cantidad
+        costoTotalArs += op.totalCompraArs
+      }
+    }
+
     const costoPromedioUnidad = cantidadTotal > 0 ? costoTotalArs / cantidadTotal : 0
 
-    // Usamos la valuación actual más reciente entre las compras del grupo.
-    const conValuacion = compras
+    // Usamos la valuación actual más reciente entre las operaciones del grupo.
+    const conValuacion = ops
       .filter(c => c.valorActualArs != null)
       .sort((a, b) => (b.actualizadoAt ?? "").localeCompare(a.actualizadoAt ?? ""))
 
@@ -98,8 +141,7 @@ export function buildInvestmentPositions(purchases: investmentPurchase[]): inves
     const tipoCambioActual = masReciente?.tipoCambioActual ?? null
     const actualizadoAt = masReciente?.actualizadoAt ?? null
 
-    // Valor actual total = suma de (cantidad de cada compra * su valorización más reciente disponible),
-    // usando la última valorización cargada como proxy para las compras sin actualizar del mismo activo.
+    // Valor actual total = cantidad tenida hoy * última valorización cargada.
     const valorActualArs = precioActual != null
       ? cantidadTotal * precioActual * (tipoCambioActual ?? 1)
       : null
@@ -112,7 +154,7 @@ export function buildInvestmentPositions(purchases: investmentPurchase[]): inves
       broker,
       activo,
       tipo,
-      moneda: compras[0].moneda,
+      moneda: ops[0].moneda,
       cantidadTotal,
       costoTotalArs,
       costoPromedioUnidad,
@@ -121,8 +163,9 @@ export function buildInvestmentPositions(purchases: investmentPurchase[]): inves
       valorActualArs,
       gananciaArs,
       gananciaPct,
+      gananciaRealizadaArs,
       actualizadoAt,
-      compras: compras.sort((a, b) => b.fechaCompra.localeCompare(a.fechaCompra)),
+      compras: ops.sort((a, b) => b.fechaCompra.localeCompare(a.fechaCompra)),
     }
   })
 }
@@ -164,6 +207,7 @@ export function calcAllocationByType(positions: investmentPosition[]): Allocatio
 
   for (const p of positions) {
     const valor = p.valorActualArs ?? p.costoTotalArs
+    if (valor <= 0) continue // posiciones cerradas (vendidas por completo) no aportan a la distribución
     totals.set(p.tipo, (totals.get(p.tipo) ?? 0) + valor)
   }
 
@@ -210,5 +254,107 @@ export function calcNetWorth(
     valorInversiones,
     patrimonioNeto: saldo + ahorroArs + valorInversiones,
     patrimonioAValorActual,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tarjetas de crédito: ciclos de facturación y cuotas.
+//
+// No se guarda una fila por cuota: cada gasto guarda el monto total y la
+// cantidad de cuotas, y acá se calcula en qué ciclo (mes de cierre) cae cada
+// una, a partir de la fecha de compra y el día de cierre de la tarjeta.
+// ---------------------------------------------------------------------------
+
+/** Parsea "YYYY-MM-DD" como fecha local, evitando el corrimiento de un día que da `new Date(str)` (UTC). */
+function parseIsoDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function toIsoDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * Clave del ciclo (año*12 + mes, absoluto) al que pertenece una fecha: si cae
+ * en o antes del día de cierre, es el ciclo que cierra ese mismo mes; si cae
+ * después, es el que cierra el mes siguiente.
+ */
+function cardCycleKey(date: Date, diaCierre: number): number {
+  const monthIndex = date.getFullYear() * 12 + date.getMonth()
+  return date.getDate() <= diaCierre ? monthIndex : monthIndex + 1
+}
+
+/** Fecha de cierre (día `diaCierre`) del ciclo identificado por `cycleKey`. */
+function cycleKeyToCierreDate(cycleKey: number, diaCierre: number): Date {
+  const year = Math.floor(cycleKey / 12)
+  const month = cycleKey % 12
+  return new Date(year, month, diaCierre)
+}
+
+/** Primera fecha >= `desde` cuyo día del mes es `dia` (para calcular el próximo vencimiento). */
+function proximaFechaConDia(desde: Date, dia: number): Date {
+  const candidata = new Date(desde.getFullYear(), desde.getMonth(), dia)
+  if (candidata < desde) {
+    return new Date(desde.getFullYear(), desde.getMonth() + 1, dia)
+  }
+  return candidata
+}
+
+/** Clave del ciclo vigente hoy para una tarjeta, dado su día de cierre. */
+export function currentCardCycleKey(diaCierre: number, now = new Date()): number {
+  return cardCycleKey(now, diaCierre)
+}
+
+/**
+ * Resumen del ciclo actual de una tarjeta: cuánto se acumuló hasta ahora (solo
+ * las cuotas que caen en el ciclo abierto), cuánto queda comprometido contra
+ * el cupo (ciclo actual + cuotas futuras todavía no cerradas), y el detalle
+ * de qué cuota de qué gasto aporta al ciclo actual.
+ */
+export function buildCardCycleSummary(
+  tarjeta: creditCard,
+  gastos: cardExpense[],
+  now = new Date()
+): cardCycleSummary {
+  const todayCycle = cardCycleKey(now, tarjeta.diaCierre)
+  const fechaCierreActual = cycleKeyToCierreDate(todayCycle, tarjeta.diaCierre)
+  const fechaVencimientoActual = proximaFechaConDia(fechaCierreActual, tarjeta.diaVencimiento)
+
+  let resumenActual = 0
+  let deudaPendiente = 0
+  const items: cardCycleItem[] = []
+
+  for (const gasto of gastos) {
+    const baseCycle = cardCycleKey(parseIsoDate(gasto.fechaCompra), tarjeta.diaCierre)
+    const montoCuota = gasto.montoTotal / gasto.cuotasTotal
+
+    for (let k = 1; k <= gasto.cuotasTotal; k++) {
+      const cycle = baseCycle + (k - 1)
+      if (cycle === todayCycle) {
+        resumenActual += montoCuota
+        items.push({ gasto, cuotaNumero: k, montoCuota })
+      }
+      // La deuda pendiente incluye el ciclo actual (todavía no se pagó) y las cuotas futuras.
+      if (cycle >= todayCycle) {
+        deudaPendiente += montoCuota
+      }
+    }
+  }
+
+  const cupoDisponible = tarjeta.cupo != null ? tarjeta.cupo - deudaPendiente : null
+  const cicloActualPagado = tarjeta.ultimoCicloPagado != null && tarjeta.ultimoCicloPagado >= todayCycle
+
+  return {
+    resumenActual,
+    deudaPendiente,
+    cupoDisponible,
+    fechaCierreActual: toIsoDate(fechaCierreActual),
+    fechaVencimientoActual: toIsoDate(fechaVencimientoActual),
+    cicloActualPagado,
+    items: items.sort((a, b) => a.gasto.fechaCompra.localeCompare(b.gasto.fechaCompra)),
   }
 }

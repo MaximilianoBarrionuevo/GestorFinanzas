@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ArrowLeftRight, CalendarClock, LayoutDashboard, TrendingUp } from "lucide-react"
+import { ArrowLeftRight, CalendarClock, CreditCard, LayoutDashboard, TrendingUp } from "lucide-react"
 import type { transactions, investmentPurchase } from "../../types/types"
 import SummaryCards from "./components/SummaryCards"
 import Charts from "./components/Charts"
@@ -7,6 +7,7 @@ import RecentTransactions from "./components/RecentTransactions"
 import UpcomingServices from "./components/UpcomingServices"
 import TransactionForm from "./components/TransactionForm"
 import { useAuth } from "../../Context/AuthContext"
+import { useToast } from "../../Context/ToastContext"
 import EditTransactionModal from "./components/EditTransactionModal"
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal"
 import ServiceForm from "./components/ServiceForm"
@@ -16,23 +17,27 @@ import SavingsSection from "./components/SavingSections"
 import InvestmentSection from "./components/InvestmentSection"
 import PositionDetailModal from "./components/PositionDetailModal"
 import EditInvestmentModal from "./components/EditInvestmentModal"
+import CreditCardsSection from "./components/CreditCardsSection"
 import Tabs, { type TabItem } from "../../components/ui/Tabs"
 import { useTransactions } from "../../Hooks/useTransactions"
 import { useServices } from "../../Hooks/useServices"
 import { useInvestments } from "../../Hooks/useInvestments"
 import { useSavings } from "../../Hooks/useSavings"
-import { calcPeriodTotals, calcNetWorth, filterCurrentMonth, calcProximaFecha } from "../../lib/Finance"
-import type { services } from "../../types/types"
+import { useCreditCards } from "../../Hooks/useCreditCards"
+import { calcPeriodTotals, calcNetWorth, filterCurrentMonth, calcProximaFecha, currentCardCycleKey } from "../../lib/Finance"
+import type { services, creditCard, cardCycleSummary } from "../../types/types"
 
 const TABS: TabItem[] = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
   { id: "movimientos", label: "Movimientos", icon: ArrowLeftRight },
   { id: "inversion", label: "Ahorro e inversión", icon: TrendingUp },
+  { id: "tarjetas", label: "Tarjetas", icon: CreditCard },
   { id: "servicios", label: "Servicios", icon: CalendarClock },
 ]
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
+  const { showError } = useToast()
   const [activeTab, setActiveTab] = useState("resumen")
 
   const { transactionsList, addTransaction, editTransaction, removeTransaction } = useTransactions(user?.id)
@@ -46,6 +51,19 @@ export default function Dashboard() {
     removePurchase,
   } = useInvestments(user?.id)
   const { savings, loading: savingsLoading, updateSavings } = useSavings(user?.id)
+  const {
+    cards,
+    expenses: cardExpenses,
+    cycleSummaries,
+    loading: cardsLoading,
+    addCard,
+    editCard,
+    removeCard,
+    markCyclePaid,
+    addExpense: addCardExpense,
+    editExpense: editCardExpense,
+    removeExpense: removeCardExpense,
+  } = useCreditCards(user?.id)
 
   // Totales históricos (para saldo líquido y total invertido a costo).
   const historicos = useMemo(() => calcPeriodTotals(transactionsList), [transactionsList])
@@ -66,19 +84,30 @@ export default function Dashboard() {
     await addTransaction(transaction)
   }
 
-  const handleRegisterInvestment: React.ComponentProps<typeof InvestmentSection>["onRegisterPurchase"] = async purchase => {
+  const handleRegisterOperation: React.ComponentProps<typeof InvestmentSection>["onRegisterOperation"] = async purchase => {
     const created = await addPurchase(purchase)
     if (!created) return null
 
-    await addTransaction({
+    const esVenta = purchase.operacion === "venta"
+
+    const registeredTransaction = await addTransaction({
       amount: purchase.totalCompraArs,
-      category: `Inversión ${purchase.tipo}`,
+      category: esVenta ? `Venta ${purchase.tipo}` : `Inversión ${purchase.tipo}`,
       description: `${purchase.broker}: ${purchase.activo} x ${purchase.cantidad} a ${purchase.moneda} ${purchase.precioCompra}${
         purchase.exchangeRate ? ` (TCR ${purchase.exchangeRate.toLocaleString("es-AR")})` : ""
       }`,
       date: purchase.fechaCompra,
-      type: "egreso",
+      type: esVenta ? "ingreso" : "egreso",
     })
+
+    // La operación (compra/venta) ya quedó guardada aunque esto falle: se lo
+    // marcamos aparte al usuario para que sepa que tiene que cargar el
+    // movimiento de caja a mano en vez de perderlo en silencio.
+    if (!registeredTransaction) {
+      showError(
+        `La ${esVenta ? "venta" : "compra"} se registró, pero no pudimos crear el movimiento en "Movimientos". Cargalo a mano si hace falta.`
+      )
+    }
 
     return created
   }
@@ -104,6 +133,24 @@ export default function Dashboard() {
       type: "egreso",
     })
     return Boolean(created)
+  }
+
+  // "Pagar resumen": registra el egreso por el total del ciclo actual y marca
+  // ese ciclo como pagado en la tarjeta, para no poder pagarlo dos veces.
+  const handlePayCardCycle = async (card: creditCard, summary: cardCycleSummary) => {
+    if (summary.resumenActual <= 0) return
+
+    const created = await addTransaction({
+      amount: summary.resumenActual,
+      category: `Tarjeta: ${card.nombre}`,
+      description: `Pago resumen ${card.nombre} (vence ${summary.fechaVencimientoActual})`,
+      date: new Date().toISOString().split("T")[0],
+      type: "egreso",
+    })
+
+    if (!created) return
+
+    await markCyclePaid(card.id, currentCardCycleKey(card.diaCierre))
   }
 
   const handleAddService: React.ComponentProps<typeof ServiceForm>["onAdd"] = async service => {
@@ -230,10 +277,26 @@ export default function Dashboard() {
             <InvestmentSection
               positions={positions}
               loading={investmentsLoading}
-              onRegisterPurchase={handleRegisterInvestment}
+              onRegisterOperation={handleRegisterOperation}
               onOpenPosition={position => setSelectedPositionKey(position.key)}
             />
           </div>
+        )}
+
+        {activeTab === "tarjetas" && (
+          <CreditCardsSection
+            cards={cards}
+            expenses={cardExpenses}
+            cycleSummaries={cycleSummaries}
+            loading={cardsLoading}
+            onAddCard={addCard}
+            onEditCard={editCard}
+            onRemoveCard={removeCard}
+            onAddExpense={addCardExpense}
+            onEditExpense={editCardExpense}
+            onRemoveExpense={removeCardExpense}
+            onPayCycle={handlePayCardCycle}
+          />
         )}
 
         {activeTab === "servicios" && (

@@ -1,22 +1,76 @@
-import type { investmentType } from "../types/types"
+import type { investmentCurrency, investmentType } from "../types/types"
 
 /**
- * Punto de extensión para cuando se quiera traer cotizaciones de mercado en
- * vivo en vez de cargarlas a mano.
+ * Cotizaciones de mercado en vivo.
  *
- * Cómo cablearlo en el futuro:
- * 1. Crypto (BTC, ETH, etc): CoinGecko API pública, sin key, `/simple/price`.
- * 2. CEDEARs / acciones: no hay una API gratuita confiable para el mercado
- *    argentino; lo más viable es un proveedor pago (ej. data912.com, IOL API)
- *    o scrapear un endpoint propio via una Edge Function de Supabase (evita
- *    problemas de CORS al llamarlo desde el browser).
- * 3. Reemplazar el cuerpo de esta función por el fetch real. La firma no
- *    debería cambiar, así que no hace falta tocar los componentes que la usan.
+ * Hoy solo está resuelto CRYPTO, vía la API pública de CoinGecko (gratis, sin
+ * key, con CORS habilitado para llamar directo desde el browser).
+ *
+ * Para CEDEARs / acciones argentinas no hay una API gratuita confiable; lo
+ * más viable es un proveedor pago (ej. data912.com, IOL API) o una Supabase
+ * Edge Function que scrapee un endpoint propio (evita problemas de CORS al
+ * llamarlo desde el browser). Para esos tipos, `fetchCurrentPrice` devuelve
+ * `null` y el usuario sigue cargando el precio a mano.
+ */
+
+// Ticker (como se carga en el form) -> id de CoinGecko. Cubre las sugerencias
+// del formulario de inversiones más algunas monedas comunes adicionales.
+const COINGECKO_IDS: Record<string, string> = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  SOL: "solana",
+  USDT: "tether",
+  USDC: "usd-coin",
+  BNB: "binancecoin",
+  ADA: "cardano",
+  XRP: "ripple",
+  DOGE: "dogecoin",
+  DOT: "polkadot",
+  MATIC: "matic-network",
+  LTC: "litecoin",
+  AVAX: "avalanche-2",
+  LINK: "chainlink",
+  TRX: "tron",
+  SHIB: "shiba-inu",
+}
+
+const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price"
+
+/**
+ * Trae el precio actual de un activo, ya denominado en `moneda` (ARS o USD)
+ * — CoinGecko soporta pedir la cotización directo en cualquiera de las dos,
+ * así que no hace falta convertir a mano con un tipo de cambio aparte.
+ * Devuelve `null` si el tipo de activo no tiene fuente automática todavía,
+ * si el ticker no está mapeado, o si falla la request (sin conexión, rate
+ * limit de CoinGecko, etc) — en todos los casos el llamador debe permitir
+ * cargar el precio a mano como fallback.
  */
 export async function fetchCurrentPrice(
-  _activo: string,
-  _tipo: investmentType
+  activo: string,
+  tipo: investmentType,
+  moneda: investmentCurrency = "USD"
 ): Promise<number | null> {
-  // Todavía no implementado: el usuario carga el precio a mano.
-  return null
+  if (tipo !== "CRYPTO") return null
+
+  const id = COINGECKO_IDS[activo.trim().toUpperCase()]
+  if (!id) return null
+
+  const vsCurrency = moneda === "ARS" ? "ars" : "usd"
+
+  try {
+    const res = await fetch(`${COINGECKO_URL}?ids=${id}&vs_currencies=${vsCurrency}`)
+    if (!res.ok) return null
+
+    const data: Record<string, Record<string, number>> = await res.json()
+    const price = data[id]?.[vsCurrency]
+
+    return typeof price === "number" ? price : null
+  } catch {
+    return null
+  }
+}
+
+/** true si `activo` (para el `tipo` dado) tiene cotización automática disponible. */
+export function hasAutoPrice(activo: string, tipo: investmentType): boolean {
+  return tipo === "CRYPTO" && activo.trim().toUpperCase() in COINGECKO_IDS
 }
