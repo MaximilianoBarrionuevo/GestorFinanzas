@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { getAuthenticatedUserId, getMpConfig, signState } from "./_shared"
+import { getAuthenticatedUserId, getMpConfig, signState } from "./_shared.js"
 
 /** Devuelve la URL de autorización de Mercado Pago para que el cliente redirija ahí. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {

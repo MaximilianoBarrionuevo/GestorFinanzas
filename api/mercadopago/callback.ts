@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { getAdminClient, getMpConfig, verifyState } from "./_shared"
+import { getAdminClient, getMpConfig, verifyState } from "./_shared.js"
 
 /**
  * Mercado Pago redirige acá (navegación de browser común, sin JS de por

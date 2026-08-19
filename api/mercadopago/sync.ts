@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { getAdminClient, getAuthenticatedUserId, getMpConfig } from "./_shared"
+import { getAdminClient, getAuthenticatedUserId, getMpConfig } from "./_shared.js"
 
 type StoredTokens = {
   access_token: string

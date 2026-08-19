@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { getAdminClient, getAuthenticatedUserId } from "./_shared"
+import { getAdminClient, getAuthenticatedUserId } from "./_shared.js"
 
 /** Le dice al cliente si el usuario tiene Mercado Pago conectado, sin exponer nunca el token. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {

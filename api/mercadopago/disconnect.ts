@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { getAdminClient, getAuthenticatedUserId } from "./_shared"
+import { getAdminClient, getAuthenticatedUserId } from "./_shared.js"
 
 /** Borra los tokens guardados. No revoca el permiso del lado de Mercado Pago (eso lo hace el usuario desde su cuenta de MP si quiere). */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
